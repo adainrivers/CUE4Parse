@@ -344,9 +344,12 @@ public class UObject : IPropertyHolder
             writer.WritePropertyName("Properties");
             writer.WriteStartObject();
 
-            var properties = Properties.GroupBy(p => p.Name.Text).ToDictionary(p => p.Key, p => p.ToDictionary(pp => pp.ArrayIndex));
+      var properties = Properties.GroupBy(p => p.Name.Text).ToDictionary(
+        p => p.Key,
+        p => p.GroupBy(pp => pp.ArrayIndex).ToDictionary(g => g.Key, g => g.Last())
+      );
 
-            foreach (var (name, props) in properties)
+      foreach (var (name, props) in properties)
             {
                 writer.WritePropertyName(name);
 
