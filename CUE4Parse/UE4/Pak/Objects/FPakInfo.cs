@@ -48,8 +48,8 @@ namespace CUE4Parse.UE4.Pak.Objects
         public readonly uint Magic;
         public readonly EPakFileVersion Version;
         public readonly bool IsSubVersion;
-        public readonly long IndexOffset;
-        public readonly long IndexSize;
+        public long IndexOffset;
+        public long IndexSize;
         public readonly FSHAHash IndexHash;
         // When new fields are added to FPakInfo, they're serialized before 'Magic' to keep compatibility
         // with older pak file versions. At the same time, structure size grows.

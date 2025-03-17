@@ -183,6 +183,20 @@ namespace CUE4Parse.UE4.Pak
 
         private void ReadIndexUpdated(StringComparer pathComparer)
         {
+            if (Ar.Game == EGame.GAME_DuneAwakening)
+            {
+                var size = Ar.Length < 8192 ? (int)Ar.Length : Ar.Length < 1 << 20 ? 8192 : 1 << 19;
+                var start = Ar.Length < 8192 ? 0 : Info.IndexOffset - size;
+                size = Math.Min(size, (int)(Ar.Length - start));
+
+                Ar.Position = start;
+                var bytes = ReadAndDecrypt(size);
+                var indexOffset = bytes.AsSpan().IndexOf(stackalloc byte[] { 0x00, 0x00, 0x00, 0x2e, 0x2e, 0x2f, 0x2e, 0x2e, 0x2f, 0x2e, 0x2e, 0x2f });
+                if (indexOffset == -1) throw new ParserException("Couldn't find index offset");
+
+                Info.IndexOffset = start + indexOffset - 1;
+                Info.IndexSize = Ar.Length - Info.IndexOffset;
+            }
             // Prepare primary index and decrypt if necessary
             Ar.Position = Info.IndexOffset;
             FArchive primaryIndex = new FByteArchive($"{Name} - Primary Index", ReadAndDecrypt((int) Info.IndexSize));

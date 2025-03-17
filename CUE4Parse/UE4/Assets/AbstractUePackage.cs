@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using CUE4Parse.FileProvider;
+using CUE4Parse.GameTypes.DuneAwakening;
 using CUE4Parse.MappingsProvider;
 using CUE4Parse.UE4.Assets.Exports;
 using CUE4Parse.UE4.Assets.Readers;
@@ -83,8 +84,13 @@ public abstract class AbstractUePackage : UObject, IPackage
         try
         {
             obj.Deserialize(Ar, validPos);
-#if DEBUG
             var remaining = validPos - Ar.Position;
+            if (obj is BitMapData bitMapData)
+            {
+                bitMapData.BitmapBytes = Ar.ReadBytes((int)remaining - 4);
+            }
+#if DEBUG
+
             switch (remaining)
             {
                 case > 0:
