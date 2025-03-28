@@ -51,8 +51,8 @@ public class LandscapeExporter : ExporterBase
     public FGuid LandscapeGuid { get; private set; }
     private List<MaterialExporter2> Materials = new List<MaterialExporter2>();
 
-    internal Dictionary<string, SKBitmap> WeightMaps { get; set; } = new();
-    internal Dictionary<string, Image> HeightMaps { get; set; } = new();
+    public Dictionary<string, SKBitmap> WeightMaps { get; set; } = new();
+    public Dictionary<string, Image> HeightMaps { get; set; } = new();
 
     internal Mesh[]? ProcessedFiles;
 
@@ -148,7 +148,7 @@ public class LandscapeExporter : ExporterBase
         final.Add(new Mesh($"{path}/Guid_{LandscapeGuid}", Encoding.UTF8.GetBytes(LandscapeGuid.ToString()), []));
 
         ProcessedFiles = final.ToArray();
-        WeightMaps.Clear();
+        //WeightMaps.Clear();
         final.Clear();
     }
 
