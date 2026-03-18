@@ -28,6 +28,7 @@ public enum EGame : uint
     GAME_UE4_13 = GameUtils.GameUe4Base + (13 << 16),
         GAME_StateOfDecay2 = GAME_UE4_13 + 1,
         GAME_WeHappyFew = GAME_UE4_13 + 2,
+        Game_StyxShardsofDarkness = GAME_UE4_13 + 3,
     GAME_UE4_14 = GameUtils.GameUe4Base + (14 << 16),
         GAME_TEKKEN7 = GAME_UE4_14 + 1,
         GAME_TransformersOnline = GAME_UE4_14 + 2,
@@ -99,9 +100,9 @@ public enum EGame : uint
         GAME_OctopathTravelerCoTC = GAME_UE4_26 + 21,
         GAME_DarkPicturesAnthologyHouseOfAshes = GAME_UE4_26 + 22,
         GAME_DarkPicturesAnthologyManofMedan = GAME_UE4_26 + 23,
-        GAME_DarkPicturesAnthologyTheDevilinMe = GAME_UE4_26 + 24,        
-        GAME_DarkPicturesAnthologyLittleHope = GAME_UE4_26 + 25,        
-        GAME_TheQuarry = GAME_UE4_26 + 26,    
+        GAME_DarkPicturesAnthologyTheDevilinMe = GAME_UE4_26 + 24,
+        GAME_DarkPicturesAnthologyLittleHope = GAME_UE4_26 + 25,
+        GAME_TheQuarry = GAME_UE4_26 + 26,
     GAME_UE4_27 = GameUtils.GameUe4Base + (27 << 16),
         GAME_Splitgate = GAME_UE4_27 + 1,
         GAME_HYENAS = GAME_UE4_27 + 2,
@@ -159,13 +160,13 @@ public enum EGame : uint
         GAME_MetroAwakening = GAME_UE5_2 + 4,
         GAME_LostRecordsBloomAndRage = GAME_UE5_2 + 5,
         GAME_DuneAwakening = GAME_UE5_2 + 6,
-        GAME_TitanQuest2 = GAME_UE5_2 + 7,
+        GAME_Placeholder4 = GAME_UE5_2 + 7,
         GAME_PUBGBlackBudget = GAME_UE5_2 + 8,
     GAME_UE5_3 = GameUtils.GameUe5Base + (3 << 16),
         GAME_MarvelRivals = GAME_UE5_3 + 1,
         GAME_BlackStigma = GAME_UE5_3 + 2,
         GAME_Valorant = GAME_UE5_3 + 3,
-        GAME_MonsterJamShowdown = GAME_UE5_3 + 4,
+        GAME_Placeholder5 = GAME_UE5_3 + 4,
         GAME_Aion2 = GAME_UE5_3 + 5,
         GAME_TheFinals = GAME_UE5_3 + 6,
         GAME_Avowed = GAME_UE5_3 + 7,
@@ -173,7 +174,7 @@ public enum EGame : uint
     GAME_UE5_4 = GameUtils.GameUe5Base + (4 << 16),
         GAME_FunkoFusion = GAME_UE5_4 + 1,
         GAME_InfinityNikki = GAME_UE5_4 + 2,
-        GAME_NevernessToEverness_CBT1 = GAME_UE5_4 + 3, // keep for now, will be removed later
+        GAME_Placeholder3 = GAME_UE5_4 + 3,
         GAME_Gothic1Remake = GAME_UE5_4 + 4,
         GAME_SplitFiction = GAME_UE5_4 + 5,
         GAME_WildAssault = GAME_UE5_4 + 6,
@@ -194,21 +195,24 @@ public enum EGame : uint
         GAME_Brickadia = GAME_UE5_5 + 1,
         GAME_Splitgate2 = GAME_UE5_5 + 2,
         GAME_DeadzoneRogue = GAME_UE5_5 + 3,
-        GAME_MotoGP25 = GAME_UE5_5 + 4,
+        GAME_Placeholder6 = GAME_UE5_5 + 4,
         GAME_Wildgate = GAME_UE5_5 + 5,
         GAME_ARKSurvivalAscended = GAME_UE5_5 + 6,
-        GAME_NevernessToEverness = GAME_UE5_5 + 7,
+        GAME_NevernessToEverness_CBT2 = GAME_UE5_5 + 7, // keep for now, will be removed later
         GAME_FateTrigger = GAME_UE5_5 + 8,
         GAME_Squad = GAME_UE5_5 + 9,
         GAME_Borderlands4 = GAME_UE5_5 + 10,
         GAME_Rennsport = GAME_UE5_5 + 11,
         GAME_GrayZoneWarfare = GAME_UE5_5 + 12,
         GAME_IntotheRadius2 = GAME_UE5_5 + 13,
+        GAME_HighOnLife2 = GAME_UE5_5 + 14,
     GAME_UE5_6 = GameUtils.GameUe5Base + (6 << 16),
         GAME_Grounded2 = GAME_UE5_6 + 1,
         GAME_AshesOfCreation = GAME_UE5_6 + 2,
-        GAME_StyxBladesofGreed = GAME_UE5_6 + 3,
+        GAME_Placeholder7 = GAME_UE5_6 + 3,
+        GAME_NevernessToEverness = GAME_UE5_6 + 4,
     GAME_UE5_7 = GameUtils.GameUe5Base + (7 << 16),
+        GAME_TitanQuest2 = GAME_UE5_7 + 1,
     GAME_UE5_8 = GameUtils.GameUe5Base + (8 << 16),
 
     GAME_UE5_LATEST = GAME_UE5_8
@@ -216,6 +220,7 @@ public enum EGame : uint
 
 public static class GameUtils
 {
+    public const int GameUe3Base = 0x3000000;
     public const int GameUe4Base = 0x4000000;
     public const int GameUe5Base = 0x5000000;
 
@@ -241,7 +246,7 @@ public static class GameUtils
                 < EGame.GAME_UE5_4 => new FPackageFileVersion(522, 1009),
                 < EGame.GAME_UE5_5 => new FPackageFileVersion(522, 1012),
                 < EGame.GAME_UE5_6 => new FPackageFileVersion(522, 1013),
-                < EGame.GAME_UE5_8 => new FPackageFileVersion(522, 1017),
+                < EGame.GAME_UE5_7 => new FPackageFileVersion(522, 1017),
                 _ => new FPackageFileVersion((int) EUnrealEngineObjectUE4Version.AUTOMATIC_VERSION, (int) EUnrealEngineObjectUE5Version.AUTOMATIC_VERSION)
             };
         }

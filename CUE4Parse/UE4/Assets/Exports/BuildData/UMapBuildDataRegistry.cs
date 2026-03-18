@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using CUE4Parse.UE4.Assets.Readers;
@@ -26,7 +27,7 @@ public class UMapBuildDataRegistry : UObject
         base.Deserialize(Ar, validPos);
 
         var stripFlags = new FStripDataFlags(Ar);
-        if (Ar.Game is EGame.GAME_Farlight84 or EGame.GAME_OutlastTrials or EGame.GAME_DuetNightAbyss) return;
+        if (Ar.Game is EGame.GAME_Farlight84 or EGame.GAME_OutlastTrials or EGame.GAME_DuetNightAbyss or EGame.GAME_CrystalOfAtlan) return;
 
         if (!stripFlags.IsAudioVisualDataStripped())
         {
@@ -41,6 +42,8 @@ public class UMapBuildDataRegistry : UObject
             LightBuildData = Ar.ReadMap(Ar.Read<FGuid>, () => new FLightComponentMapBuildData(Ar));
             if (FReflectionCaptureObjectVersion.Get(Ar) >= FReflectionCaptureObjectVersion.Type.MoveReflectionCaptureDataToMapBuildData)
             {
+                if (Ar.Game is EGame.GAME_TheFirstDescendant) return;
+
                 ReflectionCaptureBuildData = Ar.ReadMap(Ar.Read<FGuid>, () => new FReflectionCaptureMapBuildData(Ar));
             }
 
@@ -153,11 +156,8 @@ public class FReflectionCaptureData
         if (Ar.Game is EGame.GAME_FinalFantasy7Rebirth or EGame.GAME_ArenaBreakoutInfinite) Ar.Position += 4;
         if (Ar.Game == EGame.GAME_HogwartsLegacy)
         {
-            var count = Ar.Read<int>();
-            for (var i = 0; i < count; i++) Ar.SkipFixedArray(1);
-            count = Ar.Read<int>();
-            for (var i = 0; i < count; i++) Ar.SkipFixedArray(1);
-
+            Ar.SkipMultipleFixedArrays(Ar.Read<int>(), 1);
+            Ar.SkipMultipleFixedArrays(Ar.Read<int>(), 1);
         }
 
         if (FMobileObjectVersion.Get(Ar) >= FMobileObjectVersion.Type.StoreReflectionCaptureCompressedMobile &&
@@ -170,7 +170,6 @@ public class FReflectionCaptureData
             Ar.SkipFixedArray(1);
         }
 
-        if (Ar.Game == EGame.GAME_TheFirstDescendant) Ar.Position += 16;
         if (Ar.Game == EGame.GAME_Valorant) Ar.SkipFixedArray(1);
         if (Ar.Game == EGame.GAME_BlackMythWukong)
         {
@@ -201,11 +200,11 @@ public class FStaticShadowDepthMapData(FArchive Ar)
     public FFloat16[] DepthSamples = Ar.ReadArray(() => new FFloat16(Ar));
 }
 
-public class FVolumeLightingSample(FAssetArchive Ar)
+public class FVolumeLightingSample(FAssetArchive Ar, int order)
 {
     public FVector Position = Ar.Read<FVector>();
     public float Radius = Ar.Read<float>();
-    public float[][] Lighting = Ar.ReadArray(3, () => Ar.ReadArray<float>(9));
+    public float[][] Lighting = Ar.ReadArray(3, () => Ar.ReadArray<float>(order*order));
     public FColor PackedSkyBentNormal = Ar.Read<FColor>();
     public float DirectionalLightShadowing = Ar.Read<float>();
 }
@@ -215,31 +214,28 @@ public class FPrecomputedLightVolumeData
     public FBox Bounds;
     public float SampleSpacing;
     public int NumSHSamples;
-    public FVolumeLightingSample[] HighQualitySamples;
-    public FVolumeLightingSample[]? LowQualitySamples;
+    public FVolumeLightingSample[] HighQualitySamples = [];
+    public FVolumeLightingSample[] LowQualitySamples = [];
 
-    public FPrecomputedLightVolumeData(FAssetArchive Ar)
+    public FPrecomputedLightVolumeData(FAssetArchive Ar, bool readbValid = true)
     {
-        var bValid = Ar.ReadBoolean();
+        if (readbValid && !Ar.ReadBoolean()) return;
 
-        if (bValid)
+        var bVolumeInitialized = Ar.ReadBoolean();
+        if (bVolumeInitialized)
         {
-            var bVolumeInitialized = Ar.ReadBoolean();
-            if (bVolumeInitialized)
+            Bounds = new FBox(Ar);
+            SampleSpacing = Ar.Read<float>();
+            NumSHSamples = 4;
+            if (FRenderingObjectVersion.Get(Ar) >= FRenderingObjectVersion.Type.IndirectLightingCache3BandSupport)
             {
-                Bounds = new FBox(Ar);
-                SampleSpacing = Ar.Read<float>();
-                NumSHSamples = 4;
-                if (FRenderingObjectVersion.Get(Ar) >= FRenderingObjectVersion.Type.IndirectLightingCache3BandSupport)
-                {
-                    NumSHSamples = Ar.Read<int>();
-                }
+                NumSHSamples = Ar.Read<int>();
+            }
 
-                HighQualitySamples = Ar.ReadArray(() => new FVolumeLightingSample(Ar));
-                if (Ar.Ver >= EUnrealEngineObjectUE4Version.VOLUME_SAMPLE_LOW_QUALITY_SUPPORT)
-                {
-                    LowQualitySamples = Ar.ReadArray(() => new FVolumeLightingSample(Ar));
-                }
+            HighQualitySamples = Ar.ReadArray(() => new FVolumeLightingSample(Ar, NumSHSamples is 9 ? 3 : 2));
+            if (Ar.Ver >= EUnrealEngineObjectUE4Version.VOLUME_SAMPLE_LOW_QUALITY_SUPPORT)
+            {
+                LowQualitySamples = Ar.ReadArray(() => new FVolumeLightingSample(Ar, NumSHSamples is 9 ? 3 : 2));
             }
         }
     }
