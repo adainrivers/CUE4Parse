@@ -38,6 +38,10 @@ namespace CUE4Parse_Conversion.Animations
                         ext = "ueanim";
                         new UEAnim(export.Name, animSet, sequenceIndex, Options).Save(Ar);
                         break;
+                    case EAnimFormat.Gltf2:
+                        ext = "glb";
+                        Ar.Write(new GltfAnim(animSet, sequenceIndex).Model.WriteGLB().Array);
+                        break;
                     default:
                         throw new ArgumentOutOfRangeException(nameof(Options.MeshFormat), Options.MeshFormat, null);
                 }

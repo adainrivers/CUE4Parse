@@ -7,5 +7,7 @@ public enum EAnimFormat
     [Description("ActorX (psa)")]
     ActorX,
     [Description("UEFormat (ueanim)")]
-    UEFormat
+    UEFormat,
+    [Description("glTF 2.0 (glb)")]
+    Gltf2
 }
