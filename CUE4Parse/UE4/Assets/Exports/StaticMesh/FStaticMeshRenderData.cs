@@ -116,7 +116,7 @@ public class FStaticMeshRenderData
                             _ = new FDistanceFieldVolumeData(Ar);
                         }
                     }
-                    if (Ar.Game is EGame.GAME_TheFinals)
+                    if (Ar.Game is EGame.GAME_TheFinals or EGame.GAME_ArcRaiders)
                         _ = Ar.ReadArray(() => new FDistanceFieldVolumeData5(Ar));
                 }
             }
@@ -139,6 +139,21 @@ public class FStaticMeshRenderData
         }
 
         Bounds = new FBoxSphereBounds(Ar);
+
+        if (Ar.Game == EGame.GAME_RocoKingdomWorld)
+        {
+            foreach (var lod in LODs)
+            {
+                if (lod.PositionVertexBuffer != null && lod.PositionVertexBuffer.Stride != 8) continue;
+                if (lod.PositionVertexBuffer?.Verts == null) continue;
+
+                var verts = lod.PositionVertexBuffer.Verts;
+                for (var i = 0; i < verts.Length; i++)
+                {
+                    verts[i] =  verts[i] * Bounds.BoxExtent + Bounds.Origin;
+                }
+            }
+        }
 
         if (Ar.Versions["StaticMesh.HasLODsShareStaticLighting"])
         {
@@ -167,7 +182,7 @@ public class FStaticMeshRenderData
 
         var screenSizeLength = Ar.Game switch
         {
-            EGame.GAME_FragPunk => 16,
+            EGame.GAME_FragPunk or EGame.GAME_RocoKingdomWorld => 16,
             EGame.GAME_Stalker2 => 14,
             >= EGame.GAME_UE4_9 => MAX_STATIC_LODS_UE4,
             _ => 4
@@ -175,12 +190,14 @@ public class FStaticMeshRenderData
         ScreenSize = new float[screenSizeLength];
         for (var i = 0; i < ScreenSize.Length; ++i)
         {
-            if (Ar.Game >= EGame.GAME_UE4_20) // FPerPlatformProperty
+            if (Ar.Game >= EGame.GAME_UE4_20)
             {
-                var bFloatCooked = Ar.ReadBoolean();
+                ScreenSize[i] = new FPerPlatformFloat(Ar).Value;
             }
-
-            ScreenSize[i] = Ar.Read<float>();
+            else
+            {
+                ScreenSize[i] = Ar.Read<float>();
+            }
 
             if (Ar.Game == EGame.GAME_HogwartsLegacy) Ar.Position += 8;
             if (Ar.Game == EGame.GAME_VisionsofMana) Ar.Position += 4;
