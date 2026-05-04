@@ -215,6 +215,8 @@ public enum EGame : uint
         GAME_Solasta2 = GAME_UE5_6 + 3,
         GAME_NevernessToEverness = GAME_UE5_6 + 4,
         GAME_DeadByDaylight = GAME_UE5_6 + 5,
+
+        GAME_ConanExilesEnhanced = GAME_UE5_6 + 255,
     GAME_UE5_7 = GameUtils.GameUe5Base + (7 << 16),
         GAME_TitanQuest2 = GAME_UE5_7 + 1,
     GAME_UE5_8 = GameUtils.GameUe5Base + (8 << 16),
@@ -243,7 +245,7 @@ public static class GameUtils
         {
             return game switch
             {
-                    EGame.GAME_UE5_EA => new FPackageFileVersion(522, 1002),
+                  EGame.GAME_UE5_EA => new FPackageFileVersion(522, 1002),
                 < EGame.GAME_UE5_1 => new FPackageFileVersion(522, 1004),
                 < EGame.GAME_UE5_2 => new FPackageFileVersion(522, 1008),
                     EGame.GAME_TheFirstDescendant => new FPackageFileVersion(522, 1002),
