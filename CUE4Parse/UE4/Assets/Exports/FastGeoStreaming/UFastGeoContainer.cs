@@ -5,6 +5,7 @@ using Newtonsoft.Json;
 
 namespace CUE4Parse.UE4.Assets.Exports.FastGeoStreaming;
 
+public class USPFastGeoContainer : UFastGeoContainer;
 public class UFastGeoContainer : UAssetUserData
 {
     public FFastGeoComponentCluster[] ComponentClusters;
@@ -15,10 +16,13 @@ public class UFastGeoContainer : UAssetUserData
     {
         base.Deserialize(Ar, validPos);
         Assets = GetOrDefault<FPackageIndex[]>(nameof(Assets), []);
-
-        var length = (int)(validPos - Ar.Position);
         using var fgAr = new FFastGeoArchive(Ar, Assets);
         ComponentClusters = fgAr.ReadArray(() => new FFastGeoComponentCluster(fgAr));
+        if (Ar.Game is GAME_SilverPalace)
+        {
+            HLODs = [];
+            return;
+        }
         HLODs = fgAr.ReadArray(() => new FFastGeoHLOD(fgAr));
     }
 

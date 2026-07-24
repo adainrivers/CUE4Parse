@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using CUE4Parse.FileProvider.Objects;
 using CUE4Parse.FileProvider.Vfs;
 using CUE4Parse.UE4.Assets.Exports;
@@ -13,7 +9,6 @@ using CUE4Parse.UE4.Wwise.Objects.Actions;
 using CUE4Parse.UE4.Wwise.Objects.HIRC;
 using CUE4Parse.UE4.Wwise.Objects.HIRC.Containers;
 using CUE4Parse.Utils;
-using Serilog;
 
 namespace CUE4Parse.UE4.Wwise;
 
@@ -29,6 +24,7 @@ public class WwiseExtractedSound
 
 public partial class WwiseProvider
 {
+    
     private readonly AbstractVfsFileProvider _provider;
     private readonly string _gameDirectory;
     private string _baseWwiseAudioPath;
@@ -184,16 +180,17 @@ public partial class WwiseProvider
             }
         }
 
+        // Track what's in media first so we don't resolve the same audio twice via event resolution
+        var visitedMedia = new HashSet<uint>();
         foreach (var (languageData, eventData) in wwiseData.Value.EventLanguageMap)
         {
             if (!eventData.HasValue)
                 continue;
 
-            // Track what's in media first so we don't resolve the same audio twice via event resolution
-            var visitedMedia = new HashSet<uint>();
             foreach (var media in eventData.Value.Media)
             {
-                visitedMedia.Add(media.MediaId);
+                if (!visitedMedia.Add(media.MediaId))
+                    continue;
                 ProcessMediaCookedData(ownerDirectory, media, languageData, results);
             }
 
@@ -201,10 +198,17 @@ public partial class WwiseProvider
             {
                 foreach (var media in leaf.Media)
                 {
-                    visitedMedia.Add(media.MediaId);
+                    if (!visitedMedia.Add(media.MediaId))
+                        continue;
                     ProcessMediaCookedData(ownerDirectory, media, languageData, results);
                 }
             }
+        }
+
+        foreach (var (languageData, eventData) in wwiseData.Value.EventLanguageMap)
+        {
+            if (!eventData.HasValue)
+                continue;
 
             foreach (var soundBank in eventData.Value.SoundBanks)
             {
@@ -246,7 +250,7 @@ public partial class WwiseProvider
         if (data is null)
             Log.Error("Failed to load data for '{WemFileName}' wem loose file", wemFileName);
 
-        var mediaDebugName = !string.IsNullOrEmpty(media.DebugName.Text)
+        var mediaDebugName = !string.IsNullOrEmpty(media.DebugName.Text) && !media.DebugName.IsNone
             ? media.DebugName.Text.SubstringBeforeLast('.')
             : wemFileName;
 
@@ -314,7 +318,7 @@ public partial class WwiseProvider
             }
             catch (Exception e)
             {
-                Log.Warning(e, $"Failed to read soundbank file '{file.Key}'");
+                Log.Warning(e, "Failed to read soundbank file '{FileName}'", file.Key);
             }
         }
 
@@ -442,9 +446,6 @@ public partial class WwiseProvider
                         break;
 
                     default:
-                        if (hierarchy.Type is EAKBKHircType.AudioBus or EAKBKHircType.ActorMixer) // Not needed for resolving audio
-                            break;
-
                         Log.Warning("Unhandled hierarchy type {0}, while traversing through Event {1}", hierarchy.Type, eventId);
                         break;
                 }
@@ -459,7 +460,7 @@ public partial class WwiseProvider
             var fileName = wemId.ToString();
             if (_looseWemFilesLookup.TryGetValue(wemId, out var wemGameFile) | _wwiseEncodedMedia.TryGetValue(fileName, out var wemData))
             {
-                if (!string.IsNullOrEmpty(debugName))
+                if (!string.IsNullOrEmpty(debugName) && !debugName.Equals("None"))
                     fileName = $"{debugName} ({fileName})";
 
                 var outputPath = Path.Combine(ownerDirectory, fileName);
@@ -497,7 +498,7 @@ public partial class WwiseProvider
 
         if (wwiseDir is null)
         {
-            Log.Warning($"Wwise directory not found under '{searchDirectory}', external Wwise files might not exist");
+            Log.Warning("Wwise directory not found under '{SearchDirectory}', external Wwise files might not exist", searchDirectory);
             return 0;
         }
 
@@ -549,7 +550,7 @@ public partial class WwiseProvider
             {
                 // TEMP: Init bnk was found, but caching isn't supported yet, prevent exception from throwing
                 _completedWwiseFullBnkInit = true;
-                Log.Debug($"Preloaded total of {totalLoadedBanks} soundbanks, loaded size in bytes {_totalLoadedWwiseSize}/{_totalWwiseBanksSize}");
+                Log.Debug("Preloaded total of {LoadedBankCount} soundbanks, loaded size in bytes {LoadedSize}/{TotalSize}", totalLoadedBanks, _totalLoadedWwiseSize, _totalWwiseBanksSize);
                 return;
             }
         }
@@ -577,16 +578,16 @@ public partial class WwiseProvider
             totalLoadedBanks += 1;
         }
 
-        Log.Debug($"Preloaded total of {totalLoadedBanks} soundbanks, loaded size in bytes {_totalLoadedWwiseSize}/{_totalWwiseBanksSize}");
+        Log.Debug("Preloaded total of {LoadedBankCount} soundbanks, loaded size in bytes {LoadedSize}/{TotalSize}", totalLoadedBanks, _totalLoadedWwiseSize, _totalWwiseBanksSize);
         _completedWwiseFullBnkInit = totalLoadedBanks > 0;
     }
 
     private bool TryLoadAndCacheWwiseFile(GameFile? gameFile)
     {
-        if (gameFile is null || !gameFile.TryRead(out var data) || data is not { Length: > 0 } bankData)
+        if (gameFile is null || !gameFile.TryRead(out var data) || data is not { Length: > 0 })
             return false;
 
-        using var reader = new FWwiseArchive(gameFile.NameWithoutExtension, bankData);
+        using var reader = new FWwiseArchive(gameFile.NameWithoutExtension, data);
         try
         {
             var wwiseReader = new WwiseReader(reader, new WwiseGameFileSource(gameFile));
@@ -619,6 +620,9 @@ public partial class WwiseProvider
         {
             foreach (var h in wwiseReader.Hierarchies)
             {
+                // Not needed for resolving audio
+                if (h.Type is EAKBKHircType.AudioBus or EAKBKHircType.ActorMixer)
+                    continue;
                 uint id = h.Data.Id;
                 if (_wwiseHierarchyTables.TryGetValue(id, out var existing))
                 {

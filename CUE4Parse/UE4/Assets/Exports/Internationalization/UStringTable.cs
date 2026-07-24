@@ -36,12 +36,13 @@ public class UStringTable : UObject
         base.Deserialize(Ar, validPos);
 
         StringTable = new FStringTable(Ar);
-        if (Ar.Game is EGame.GAME_DeltaForce && StringTable.KeysToEntries.Count == 0 &&
+        if (Ar.Game is GAME_DeltaForce && StringTable.KeysToEntries.Count == 0 &&
             Ar.Owner?.Provider is IVfsFileProvider provider && provider.TryCreateReader(Path.ChangeExtension(Ar.Name, "ustbin"), out var reader))
         {
             var deltaStringTable = new FDeltaStringTable(reader);
             StringTable.TableNamespace = deltaStringTable.TableNamespace;
-            StringTable.KeysToEntries = deltaStringTable.KeysToEntries;
+            StringTable.KeysToEntries = deltaStringTable.KeysToEntries.ToDictionary(pair => pair.Key, pair => pair.Value.Name);
+            Ar.Position += 8;
         }
     }
 

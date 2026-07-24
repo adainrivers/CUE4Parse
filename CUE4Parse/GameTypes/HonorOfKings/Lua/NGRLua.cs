@@ -1,14 +1,12 @@
-using System;
 using System.Buffers.Binary;
-using System.Collections.Generic;
-using System.IO;
-using CUE4Parse.UE4.Lua;
+using CUE4Parse.UE4.Lua.Archives;
+using CUE4Parse.UE4.Lua.Readers;
+using CUE4Parse.UE4.Lua.Writers;
 using CUE4Parse.UE4.Versions;
-using Serilog;
 
 namespace CUE4Parse.GameTypes.HonorOfKings.Lua;
 
-public class FNGRLuaArchive(string name, byte[] data, VersionContainer? versions = null) : FLuaArchive(name, data, versions)
+public class FNGRLuaArchive(string name, byte[] data, VersionContainer? versions = null) : FLua54Archive(name, data, versions)
 {
     public T ReadBE<T>() where T : unmanaged
     {
@@ -45,6 +43,7 @@ public readonly struct Chunk(FNGRLuaArchive Ar, int chunkSize)
 
 public class NGRLuaReader
 {
+    
     private const uint NGR_LUA_MAGIC = 0xFADEFACE;
 
     public FadeFaceHeader Header;
@@ -84,7 +83,7 @@ public class NGRLuaReader
         Header = new FadeFaceHeader(Ar);
         if (Header.Magic != NGR_LUA_MAGIC)
         {
-            Log.Warning($"Invalid magic: 0x{Header.Magic:X}, expected: 0x{NGR_LUA_MAGIC:X}");
+            Log.Warning("Invalid magic: 0x{Magic:X}, expected: 0x{ExpectedMagic:X}", Header.Magic, NGR_LUA_MAGIC);
             return data;
         }
 
@@ -160,10 +159,10 @@ public class NGRLuaReader
     {
         using var Ar = new FNGRLuaArchive(name, decryptedLuaBytecode, null);
 
-        var lua = FLuaReader.ReadLua54(Ar, _opcodeMapping);
+        var lua = FLua54Reader.ReadLuaBytecode(Ar, _opcodeMapping);
 
         using var msOut = new MemoryStream(decryptedLuaBytecode.Length);
-        using (var writer = new FLuaArchiveWriter(msOut))
+        using (var writer = new FLua54ArchiveWriter(msOut))
         {
             FLuaWriter54.Write(writer, lua);
             writer.Flush();

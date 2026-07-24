@@ -1,10 +1,10 @@
-using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using CUE4Parse.UE4.Assets.Readers;
+using CUE4Parse.UE4.Exceptions;
 using CUE4Parse.UE4.Objects.Core.Misc;
 using CUE4Parse.UE4.Readers;
 using Newtonsoft.Json;
-using Serilog;
 using static CUE4Parse.UE4.Assets.Objects.EBulkDataFlags;
 
 namespace CUE4Parse.UE4.Assets.Objects;
@@ -25,6 +25,7 @@ public sealed class FByteArrayData : TBulkData<byte>
 [JsonConverter(typeof(FByteBulkDataConverter))]
 public sealed class FByteBulkData : TBulkData<byte>
 {
+    
     public FByteBulkData(FAssetArchive Ar) : base(Ar) { }
 
     /// <summary>
@@ -56,6 +57,21 @@ public sealed class FByteBulkData : TBulkData<byte>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public override int GetDataSize() => Header.ElementCount;
 
+    public bool TryCreateReader(string name, [NotNullWhen(true)] out FArchive reader, bool useCachedData = true)
+    {
+        try
+        {
+            var data = ReadDataOnce(useCachedData) ?? [];
+            reader = new FByteArchive(name, data, _savedAr?.Versions);
+        }
+        catch (Exception e)
+        {
+            Log.Error(e, "Could not create {0} reader for FByteBulkData", name);
+            reader = null!;
+        }
+        return reader != null && reader.Length > 0;
+    }
+
     protected override bool ReadBulkDataInto(out byte[] data)
     {
         data = [];
@@ -86,27 +102,29 @@ public sealed class FByteBulkData : TBulkData<byte>
     {
         fullBulkData = null;
         combinedData = [];
+        var saved = Ar.Position;
         try
         {
-            var saved = Ar.Position;
             var secondChunk = new FByteBulkData(Ar);
-            var secondChunkData = secondChunk.Data;
-            if (Data is null || secondChunkData is null) return false;
+            var secondChunkData = secondChunk.ReadDataOnce();
+            var data = ReadDataOnce();
+            if (data is null || secondChunkData is null) return false;
 
-            if (Data.Length < secondChunkData.Length && secondChunkData.AsSpan()[..Data.Length].SequenceEqual(Data))
+            if (data.Length < secondChunkData.Length && secondChunkData.AsSpan()[..data.Length].SequenceEqual(data))
             {
                 combinedData = secondChunkData;
                 fullBulkData = secondChunk;
                 return true;
             }
 
-            combinedData = new byte[GetDataSize() + secondChunk.GetDataSize()];
-            Buffer.BlockCopy(Data, 0, combinedData, 0, GetDataSize());
-            Buffer.BlockCopy(secondChunkData, 0, combinedData, GetDataSize(), secondChunk.GetDataSize());
+            combinedData = new byte[data.Length + secondChunkData.Length];
+            data.CopyTo(combinedData.AsSpan());
+            secondChunkData.CopyTo(combinedData.AsSpan(data.Length));
             return true;
         }
         catch
         {
+            Ar.Position = saved;
             return false;
         }
     }

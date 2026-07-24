@@ -1,4 +1,3 @@
-using System;
 using System.Runtime.InteropServices;
 using CUE4Parse.UE4.Wwise.Objects;
 
@@ -23,10 +22,13 @@ public struct AkReflectFXParams
     public AkFilteredFracDelayLineParams delayLineParams;
     public float fPrevDryGain;
     public AkChannelConfig OutputChannelConfig;
+    public float DelayErrorTolerance;
     public float DistanceWarping;
     public float DiffractionWarping;
     public AkDecorrParams DecorrParams;
     public float FadeTime;
+    public bool HardwareProcessing;
+    public float MaxImageSourceDelayTime;
 
     public AkReflectFXParams(FWwiseArchive Ar)
     {
@@ -43,6 +45,10 @@ public struct AkReflectFXParams
         delayLineParams.PitchThreshold = Ar.Read<float>();
         delayLineParams.DistanceThreshold = Ar.Read<float>();
         delayLineParams.ThresholdMode = Ar.Read<uint>();
+        if (Ar.Version >= 172)
+        {
+            DelayErrorTolerance = Ar.Read<float>();
+        }
         if (Ar.Version >= 145)
         {
             DistanceWarping = Ar.Read<float>();
@@ -52,7 +58,12 @@ public struct AkReflectFXParams
         if (Ar.Version >= 145)
         {
             DecorrParams = new AkDecorrParams(Ar);
-            FadeTime = Ar.Read<float>();
+            FadeTime = Ar.Version >= 154 ? Ar.Read<float>() : 0.0f;
+        }
+        if (Ar.Version >= 172)
+        {
+            HardwareProcessing = Ar.Read<byte>() != 0;
+            MaxImageSourceDelayTime = Ar.Read<float>();
         }
         var curvesCount = Ar.Read<ushort>();
         m_Curves = new CAkConversionTable[curvesCount];
@@ -86,5 +97,5 @@ public struct AkDecorrParams(FWwiseArchive Ar)
     public bool StereoDecorrelation = Ar.Read<byte>() != 0;
     public float DecorrWindowWidth = Ar.Read<float>();
     public bool DecorrHardwareAcceleration = Ar.Read<byte>() != 0;
-    public uint MaterialFilteringSelect = Ar.Read<uint>();
+    public uint MaterialFilteringSelect = Ar.Version >= 154 ? Ar.Read<uint>() : 0;
 }
