@@ -57,6 +57,33 @@ namespace CUE4Parse.FileProvider
         public bool SkipReferencedTextures { get; set; }
         public bool UseLazyPackageSerialization { get; set; } = true;
 
+        /// <summary>
+        /// When &gt; 0, LoadPackage(GameFile) memoizes parsed packages in a bounded
+        /// approximate-LRU cache of this many entries. World-partition-heavy games
+        /// (each generated cell re-resolves the same shared world/actor imports)
+        /// otherwise re-deserialize the shared dependency graph once per cell, which
+        /// is quadratic in both time and allocation churn. Safe to share packages
+        /// across threads: lazy exports clone their archive per deserialization and
+        /// Lazy&lt;T&gt; defaults to ExecutionAndPublication. 0 (default) = off.
+        /// </summary>
+        public int PackageCacheSize
+        {
+            get => _packageCacheSize;
+            set
+            {
+                _packageCacheSize = value;
+                _packageCache = value > 0 ? new ConcurrentDictionary<string, CachedPackage>(PathComparer) : null;
+            }
+        }
+        private int _packageCacheSize;
+        private ConcurrentDictionary<string, CachedPackage>? _packageCache;
+        private long _packageCacheTick;
+        private sealed class CachedPackage
+        {
+            public required IPackage Package;
+            public long LastUse;
+        }
+
         public TypeMappings? MappingsForGame => MappingsContainer?.MappingsForGame;
 
         protected AbstractFileProvider(VersionContainer? versions = null, StringComparer? pathComparer = null)
@@ -593,6 +620,32 @@ namespace CUE4Parse.FileProvider
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public IPackage LoadPackage(string path) => LoadPackage(this[path]);
         public virtual IPackage LoadPackage(GameFile file)
+        {
+            var cache = _packageCache;
+            if (cache == null) return LoadPackageUncached(file);
+
+            var tick = Interlocked.Increment(ref _packageCacheTick);
+            if (cache.TryGetValue(file.Path, out var hit))
+            {
+                hit.LastUse = tick;
+                return hit.Package;
+            }
+
+            var loaded = LoadPackageUncached(file);
+            cache[file.Path] = new CachedPackage { Package = loaded, LastUse = tick };
+            var limit = _packageCacheSize;
+            if (limit > 0 && cache.Count > limit)
+            {
+                // Evict the least-recently-used quarter so eviction stays amortized.
+                foreach (var kv in cache.ToArray().OrderBy(kv => kv.Value.LastUse).Take(cache.Count - limit + limit / 4))
+                {
+                    cache.TryRemove(kv.Key, out _);
+                }
+            }
+            return loaded;
+        }
+
+        private IPackage LoadPackageUncached(GameFile file)
         {
             if (!file.IsUePackage) throw new ArgumentException("cannot load non-UE package", nameof(file));
             Files.FindPayloads(file, out var uexp, out var ubulks, out var uptnls);
