@@ -41,12 +41,20 @@ public sealed class IoPackage : AbstractUePackage
             provider)
     { }
 
+    /// <summary>
+    /// True when this package was loaded header-only (summary + name map + export map)
+    /// for import-name resolution. Its ExportsLazy entries transparently upgrade to a
+    /// full package load on first access.
+    /// </summary>
+    public bool HeaderOnly { get; private set; }
+
     public IoPackage(
         FArchive uasset,
         FIoContainerHeader? containerHeader = null,
         Func<FByteBulkDataHeader?, FArchive?>? ubulk = null,
         Func<FByteBulkDataHeader?, FArchive?>? uptnl = null,
-        IVfsFileProvider? provider = null)
+        IVfsFileProvider? provider = null,
+        bool headerOnly = false)
         : base(uasset.Name.SubstringBeforeLast('.'), provider)
     {
         _globalData = provider?.GlobalData ?? throw new ParserException("Found IoStore Package but global data is missing, can't serialize");
@@ -195,13 +203,26 @@ public sealed class IoPackage : AbstractUePackage
             allExportDataOffset = summary.GraphDataOffset + summary.GraphDataSize;
         }
 
-        // Preload dependencies
+        // Preload dependencies. Import resolution only needs the referenced
+        // packages' headers (name map + export map) — when the provider has
+        // header-only resolution enabled, use the shared header cache instead of
+        // fully loading (and decompressing) every referenced package per consumer.
         ImportedPackages = new Lazy<IoPackage?[]>(() =>
         {
             var packages = new IoPackage?[importedPackageIds.Length];
-            for (var i = 0; i < importedPackageIds.Length; i++)
+            if (provider is AbstractVfsFileProvider { UseHeaderOnlyImportResolution: true } vfsHeaderProvider)
             {
-                provider.TryLoadPackage(importedPackageIds[i], out packages[i]);
+                for (var i = 0; i < importedPackageIds.Length; i++)
+                {
+                    vfsHeaderProvider.TryLoadPackageHeader(importedPackageIds[i], out packages[i]);
+                }
+            }
+            else
+            {
+                for (var i = 0; i < importedPackageIds.Length; i++)
+                {
+                    provider.TryLoadPackage(importedPackageIds[i], out packages[i]);
+                }
             }
             return packages;
         });
@@ -222,6 +243,26 @@ public sealed class IoPackage : AbstractUePackage
             }
             return packages;
         });
+
+        if (headerOnly)
+        {
+            // Header-only mode: keep summary/name map/export map for import-name
+            // resolution, but skip export-lazy construction so the decompressed
+            // package buffer (uassetAr) is not retained. Any access to an actual
+            // export object transparently upgrades to a full package load.
+            HeaderOnly = true;
+            var fullPackage = new Lazy<IPackage?>(() =>
+                provider.TryLoadPackage(FPackageId.FromName(Name), out IoPackage? full) ? full : null);
+            for (var i = 0; i < ExportsLazy.Length; i++)
+            {
+                var exportIndex = i;
+                ExportsLazy[exportIndex] = new Lazy<UObject>(() =>
+                    fullPackage.Value is { } fp
+                        ? fp.ExportsLazy[exportIndex].Value
+                        : throw new ParserException($"Header-only package {Name} could not be fully loaded for export access"));
+            }
+            return;
+        }
 
         if (!CanDeserialize) return;
 
