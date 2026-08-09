@@ -9,9 +9,9 @@ namespace CUE4Parse.UE4.Objects.Meshes;
 [JsonConverter(typeof(FPositionVertexBufferConverter))]
 public class FPositionVertexBuffer
 {
-    public FVector[] Verts;
-    public int Stride;
-    public int NumVertices;
+    public readonly FVector[] Verts;
+    public readonly int Stride;
+    public readonly int NumVertices;
 
     public FPositionVertexBuffer()
     {
@@ -101,6 +101,8 @@ public class FPositionVertexBuffer
 
         Stride = Ar.Read<int>();
         NumVertices = Ar.Read<int>();
+
+        if (Ar.Game is GAME_TamasShadowveil) Ar.Position += 4;
 
         if (Ar.Game is GAME_Valorant_PRE_11_2 or GAME_NeedForSpeedMobile || (Ar.Game is GAME_ArenaBreakoutInfinite or GAME_ArenaBreakoutMobile && Stride == 8))
         {

@@ -28,6 +28,7 @@ using CUE4Parse.GameTypes.SD.Encryption.Aes;
 using CUE4Parse.GameTypes.SilverPalace.Encryption;
 using CUE4Parse.GameTypes.Snowbreak.Encryption.Aes;
 using CUE4Parse.GameTypes.Splitgate2.Encryption.Aes;
+using CUE4Parse.GameTypes.Tencent.PUBGMobile.Encryption.Aes;
 using CUE4Parse.GameTypes.Tencent.ValorantSource.Encryption.Aes;
 using CUE4Parse.GameTypes.THPS.Encryption.Aes;
 using CUE4Parse.GameTypes.UDWN.Encryption.Aes;
@@ -78,7 +79,7 @@ namespace CUE4Parse.FileProvider.Vfs
             {
                 GAME_ApexLegendsMobile => ApexLegendsMobileAes.DecryptApexMobile,
                 GAME_Snowbreak => SnowbreakAes.SnowbreakDecrypt,
-                GAME_MarvelRivals => MarvelAes.MarvelDecrypt,
+                GAME_MarvelRivals or GAME_TamasShadowveil => NetEaseAes.NetEaseDecrypt,
                 GAME_Undawn => ToaaAes.ToaaDecrypt,
                 GAME_DeadByDaylight or GAME_DeadByDaylight_Old => DBDAes.DbDDecrypt,
                 GAME_PaxDei => PaxDeiAes.PaxDeiDecrypt,
@@ -105,6 +106,7 @@ namespace CUE4Parse.FileProvider.Vfs
                 GAME_eBaseballProSpirit => ProSpiEncryption.ProSpiDecrypt,
                 GAME_SilverPalace => SilverPalaceAes.SilverPalaceDecrypt,
                 GAME_ValorantSource => ValorantSourceAes.ValorantSourceDecrypt,
+                GAME_PUBGMobile or GAME_PUBGLite => PUBGMobileAes.PUBGMobileDecrypt,
                 _ => null
             };
         }

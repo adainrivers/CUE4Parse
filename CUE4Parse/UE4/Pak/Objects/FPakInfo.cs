@@ -1,8 +1,9 @@
 using System.Buffers.Binary;
 using CUE4Parse.Compression;
 using CUE4Parse.GameTypes.ABI.Encryption.SM4;
-using CUE4Parse.GameTypes.Tencent.ValorantSource.Encryption;
+using CUE4Parse.GameTypes.Tencent.PUBGMobile.Encryption.RSA;
 using CUE4Parse.GameTypes.Tencent.ValorantSource.Encryption.Aes;
+using CUE4Parse.GameTypes.Tencent.ValorantSource.Encryption.RSA;
 using CUE4Parse.UE4.Exceptions;
 using CUE4Parse.UE4.Objects.Core.Misc;
 using CUE4Parse.UE4.Readers;
@@ -47,7 +48,7 @@ public partial class FPakInfo
     public const uint PAK_FILE_MAGIC_CrystalOfAtlan = 0x22ce976a;
     public const uint PAK_FILE_MAGIC_PromiseMascotAgency = 0x11adde11;
     public const uint PAK_FILE_MAGIC_ArenaBreakoutInfinite = 0x53647586;
-    public const uint PAK_FILE_MAGIC_ArenaBreakoutMobile = 0x57647587;
+    public const uint PAK_FILE_MAGIC_ArenaBreakoutMobile = 0x57647500; // Special case, magic is incremented for encryption updates
     public const uint PAK_FILE_MAGIC_AssaultFireFuture = 0x4F6FAE86;
     public const uint PAK_FILE_MAGIC_Back4Blood = 0x18772;
     public const uint PAK_FILE_MAGIC_SilverPalace = 0x12E15A6F;
@@ -97,7 +98,7 @@ public partial class FPakInfo
             Version = Ar.Read<EPakFileVersion>();
             if (Version >= EPakFileVersion.PakFile_Version_PathHashIndex)
             {
-                Version = EPakFileVersion.PakFile_Version_FNameBasedCompressionMethod;// Override to force readIndexLegacy
+                Version = EPakFileVersion.PakFile_Version_FNameBasedCompressionMethod; // Override to force readIndexLegacy
             }
             IndexHash = new FSHAHash(Ar);
             IndexSize = (long)(Ar.Read<ulong>() ^ 0x8924b0e3298b7069);
@@ -106,6 +107,41 @@ public partial class FPakInfo
             [
                 CompressionMethod.None, CompressionMethod.Zlib, CompressionMethod.Gzip, CompressionMethod.Oodle,
                 CompressionMethod.LZ4, CompressionMethod.Zstd
+            ];
+            return;
+        }
+
+        // Xor bytes for PUBG footer are generated with Zuc128
+        // Key: 0x01010101010101010101010101010101
+        // IV:  0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+        if (Ar.Game is GAME_PUBGMobile or GAME_PUBGLite)
+        {
+            EncryptionKeyGuid = default;
+            EncryptedIndex = (Ar.Read<byte>() ^ 0x01) != 0;
+            Magic = (Ar.Read<uint>() ^ 0xA0116E7);
+            if (Magic is not PAK_FILE_MAGIC) return;
+            Version = Ar.Read<EPakFileVersion>();
+            if (Version >= EPakFileVersion.PakFile_Version_PathHashIndex)
+            {
+                Version = EPakFileVersion.PakFile_Version_FNameBasedCompressionMethod; // Override to force readIndexLegacy
+            }
+
+            var obfuscatedHashData = Ar.ReadBytes(20);
+            ReadOnlySpan<byte> hashDataXor =
+            [
+                0x8C, 0xD3, 0xA0, 0x5A, 0xD3, 0x64, 0x53, 0xDE, 0xED, 0xA8,
+                0xCA, 0x59, 0x26, 0xC6, 0x95, 0x54, 0x84, 0x25, 0x9B, 0xE0
+            ];
+
+            for (int i = 0; i < obfuscatedHashData.Length; i++)
+                obfuscatedHashData[i] ^= hashDataXor[i];
+
+            IndexHash = new FSHAHash(obfuscatedHashData);
+            IndexSize = Ar.Read<long>() ^ 0x1FFBEE0AB84D0C43;
+            IndexOffset = (long) (Ar.Read<ulong>() ^ 0xA6D17AB4D4783A41);
+            CompressionMethods =
+            [
+                CompressionMethod.None, CompressionMethod.Zlib, CompressionMethod.Oodle, CompressionMethod.Zstd
             ];
             return;
         }
@@ -126,7 +162,7 @@ public partial class FPakInfo
             }
 
             // Chinese mobile version
-            if (Magic == PAK_FILE_MAGIC_ArenaBreakoutMobile)
+            if ((Magic & 0xFFFFFF00) == PAK_FILE_MAGIC_ArenaBreakoutMobile)
             {
                 EncryptionKeyGuid = default;
                 EncryptedIndex = Ar.Read<byte>() != 0;
@@ -134,7 +170,7 @@ public partial class FPakInfo
                 var indexInfo = new byte[16];
                 Buffer.BlockCopy(encryptedIndexInfo, 8, indexInfo, 0, 8);
                 Buffer.BlockCopy(encryptedIndexInfo, 0, indexInfo, 8, 8);
-                ABIDecryption.DecryptAbiMobilePakInfo(indexInfo);
+                ABIDecryption.DecryptAbiMobilePakInfo(indexInfo, Magic & 0xFF);
                 IndexOffset = BinaryPrimitives.ReadInt64LittleEndian(indexInfo);
                 IndexSize = BinaryPrimitives.ReadInt64LittleEndian(indexInfo.AsSpan(8));
                 IndexHash = new FSHAHash(Ar);
@@ -495,7 +531,7 @@ public partial class FPakInfo
     {
         Size = sizeof(int) * 2 + sizeof(long) * 2 + 20 + /* new fields */ 1 + 16, // sizeof(FGuid)
         // Just to be sure
-        SizeGameForPeace = 45,
+        SizePUBG = 45, // Game For Peace (Chinese PUBG Mobile), PUBG Mobile, PUBG Lite, PUBG India
         Size8_1 = Size + 32,
         Size8_2 = Size8_1 + 32,
         Size8_3 = Size8_2 + 32,
@@ -576,7 +612,7 @@ public partial class FPakInfo
                 GAME_DeadByDaylight or GAME_DeadByDaylight_Old => [OffsetsToTry.SizeDbD],
                 GAME_Farlight84 => [OffsetsToTry.SizeFarlight],
                 GAME_QQ or GAME_DreamStar => [OffsetsToTry.SizeDreamStar, OffsetsToTry.SizeQQ],
-                GAME_GameForPeace or GAME_DragonQuestXI => [OffsetsToTry.SizeGameForPeace],
+                GAME_GameForPeace or GAME_DragonQuestXI or GAME_PUBGMobile or GAME_PUBGLite => [OffsetsToTry.SizePUBG],
                 GAME_BlackMythWukong => [OffsetsToTry.SizeB1],
                 GAME_Rennsport => [OffsetsToTry.SizeRennsport],
                 GAME_RacingMaster => [OffsetsToTry.SizeRacingMaster],
@@ -621,19 +657,23 @@ public partial class FPakInfo
                     GAME_PromiseMascotAgency when info.Magic == PAK_FILE_MAGIC_PromiseMascotAgency => true,
                     GAME_WildAssault when info.Magic == PAK_FILE_MAGIC_WildAssault => true,
                     GAME_ArenaBreakoutInfinite when info.Magic == PAK_FILE_MAGIC_ArenaBreakoutInfinite => true,
-                    GAME_ArenaBreakoutMobile when info.Magic is PAK_FILE_MAGIC_ArenaBreakoutInfinite or PAK_FILE_MAGIC_ArenaBreakoutMobile => true,
+                    GAME_ArenaBreakoutMobile when info.Magic == PAK_FILE_MAGIC_ArenaBreakoutInfinite || (info.Magic & 0xFFFFFF00) == PAK_FILE_MAGIC_ArenaBreakoutMobile => true,
                     GAME_AssaultFireFuture when info.Magic == PAK_FILE_MAGIC_AssaultFireFuture => true,
                     GAME_Back4Blood when info.Magic == PAK_FILE_MAGIC_Back4Blood => true,
                     GAME_SilverPalace when info.Magic == PAK_FILE_MAGIC_SilverPalace => true,
                     GAME_ValorantSource when info.Magic == PAK_FILE_MAGIC_ValorantSource => true,
                     _ => info.Magic == PAK_FILE_MAGIC
                 };
+
                 if (found)
                 {
-                    if (Ar.Game is GAME_ValorantSource)
+                    info.CustomEncryptionData = Ar.Game switch
                     {
-                        info.CustomEncryptionData = ValorantSourceRSA.DerivePakKey(Ar, info.CustomEncryptionData);
-                    }
+                        GAME_ValorantSource => ValorantSourceRSA.DerivePakKey(Ar, info.CustomEncryptionData),
+                        GAME_PUBGMobile => PUBGMobileRSA.DeriveGlobalPakKey(Ar),
+                        GAME_PUBGLite => PUBGMobileRSA.DeriveLitePakKey(Ar),
+                        _ => info.CustomEncryptionData
+                    };
 
                     return info;
                 }

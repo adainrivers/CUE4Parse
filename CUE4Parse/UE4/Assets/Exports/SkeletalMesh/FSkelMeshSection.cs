@@ -236,6 +236,10 @@ public class FSkelMeshSection
         if (Ar.Game == GAME_Paragon) Ar.Position += 1; // bool
         bRecomputeTangent = Ar.ReadBoolean();
         RecomputeTangentsVertexMaskChannel = FRecomputeTangentCustomVersion.Get(Ar) >= FRecomputeTangentCustomVersion.Type.RecomputeTangentVertexColorMask ? Ar.Read<ESkinVertexColorChannel>() : ESkinVertexColorChannel.None;
+        if (Ar.Game == GAME_WutheringWaves && Ar.Owner?.NameMap.Any(n => n.Name == "KuroRuntimeLODBias_PackedData2") == true)
+        {
+            Ar.Position += 4; // WuWa 3.6+: extra int32 field after RecomputeTangentsVertexMaskChannel
+        }
         if (Ar.Game == GAME_DeltaForce) Ar.Position += 3;
         if (Ar.Game == GAME_BigRumbleBoxingCreedChampions) Ar.Position += 4;
         bCastShadow = FEditorObjectVersion.Get(Ar) < FEditorObjectVersion.Type.RefactorMeshEditorMaterials || Ar.ReadBoolean();
@@ -243,6 +247,7 @@ public class FSkelMeshSection
         bVisibleInRayTracing = FUE5MainStreamObjectVersion.Get(Ar) < FUE5MainStreamObjectVersion.Type.SkelMeshSectionVisibleInRayTracingFlagAdded || Ar.ReadBoolean();
         BaseVertexIndex = Ar.Read<uint>();
         ClothMappingDataLODs = FUE5ReleaseStreamObjectVersion.Get(Ar) < FUE5ReleaseStreamObjectVersion.Type.AddClothMappingLODBias ? [Ar.ReadArray(() => new FMeshToMeshVertData(Ar))] : Ar.ReadArray(() => Ar.ReadArray(() => new FMeshToMeshVertData(Ar)));
+        if (Ar.Game is GAME_TamasShadowveil) Ar.Position += 8;
         BoneMap = Ar.ReadArray<ushort>();
         NumVertices = Ar.Read<int>();
 
