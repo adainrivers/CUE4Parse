@@ -34,6 +34,7 @@ using CUE4Parse.GameTypes.THPS.Encryption.Aes;
 using CUE4Parse.GameTypes.UDWN.Encryption.Aes;
 using CUE4Parse.GameTypes.UWO.Encryption.Aes;
 using CUE4Parse.UE4.Assets;
+using CUE4Parse.UE4.Assets.Objects;
 using CUE4Parse.UE4.Exceptions;
 using CUE4Parse.UE4.IO;
 using CUE4Parse.UE4.IO.Objects;
@@ -466,6 +467,58 @@ namespace CUE4Parse.FileProvider.Vfs
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public FArchive CreateReader(string path, IAesVfsReader archive) => this[path, archive].CreateReader();
+
+        /// <summary>
+        /// When enabled, IoPackage import resolution loads referenced packages
+        /// HEADER-ONLY (summary + name map + export map, no export lazies, buffer
+        /// not retained) through an unbounded per-provider cache. Import name/path
+        /// resolution only needs headers; actual export-object access on a
+        /// header-only package transparently upgrades to a full load. Massive win
+        /// for world-partition-heavy games where thousands of generated cells each
+        /// re-resolve overlapping import sets.
+        /// </summary>
+        public bool UseHeaderOnlyImportResolution
+        {
+            get => _headerCache != null;
+            set => _headerCache = value ? new ConcurrentDictionary<FPackageId, IoPackage?>() : null;
+        }
+        private ConcurrentDictionary<FPackageId, IoPackage?>? _headerCache;
+
+        /// <summary>Load (or fetch from the header cache) a header-only IoPackage for import resolution. Failures are cached as null.</summary>
+        public bool TryLoadPackageHeader(FPackageId id, out IoPackage? package)
+        {
+            var cache = _headerCache;
+            if (cache == null)
+            {
+                // Feature disabled — fall back to a full load.
+                var ok = TryLoadPackage(id, out IoPackage? full);
+                package = full;
+                return ok;
+            }
+
+            if (cache.TryGetValue(id, out package)) return package != null;
+
+            package = null;
+            if (FilesById.TryGetValue(id, out var file) && file.IsUePackage)
+            {
+                try
+                {
+                    var uasset = file.CreateReader();
+                    if (file is FIoStoreEntry ioStoreEntry)
+                    {
+                        package = new IoPackage(uasset, ioStoreEntry.IoStoreReader.ContainerHeader,
+                            (Func<FByteBulkDataHeader?, FArchive?>?) null, null, this, headerOnly: true);
+                    }
+                }
+                catch
+                {
+                    package = null;
+                }
+            }
+
+            cache[id] = package;
+            return package != null;
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public IoPackage LoadPackage(FPackageId id) => (IoPackage) LoadPackage(FilesById[id]);
