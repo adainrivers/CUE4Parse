@@ -15,6 +15,7 @@ using CUE4Parse.UE4.Objects.Engine;
 using CUE4Parse.UE4.Objects.Engine.Animation;
 using CUE4Parse_Conversion.Exporters;
 using CUE4Parse_Conversion.Options;
+using CUE4Parse.UE4.Assets.Exports.GeometryCollection;
 
 namespace CUE4Parse_Conversion;
 
@@ -29,7 +30,7 @@ public sealed class ExportSession(Action<StreamingLevelFilterArgs, CancellationT
     internal DirectoryInfo BaseDirectory => _baseDirectory ?? throw new InvalidOperationException("Session is not currently running.");
 
     private ExportOptions? _options;
-    public ExportOptions Options => _options ?? throw new InvalidOperationException("Session is not currently running.");
+    internal ExportOptions Options => _options ?? throw new InvalidOperationException("Session is not currently running.");
 
     private int _totalQueued;
     public int TotalQueued => Volatile.Read(ref _totalQueued);
@@ -49,6 +50,7 @@ public sealed class ExportSession(Action<StreamingLevelFilterArgs, CancellationT
             UMaterialInterface material => Add(new MaterialExporter(material)),
             USkeletalMesh skeletalMesh => Add(new SkeletalMeshExporter(skeletalMesh)),
             UStaticMesh staticMesh => Add(new StaticMeshExporter(staticMesh)),
+            UGeometryCollection geometryCollection => Add(new GeometryCollectionExporter(geometryCollection)),
             USkeleton skeleton => Add(new SkeletonExporter(skeleton)),
             UPoseAsset poseAsset => Add(new PoseAssetExporter(poseAsset)),
             UAnimationAsset animation => Add(new AnimationExporter(animation)),

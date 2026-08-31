@@ -119,7 +119,7 @@ public class FScriptStruct
             "IntVector" => type == ReadType.ZERO ? new FIntVector() : Ar.Read<FIntVector>(),
             "UintVector" => type == ReadType.ZERO ? new TIntVector3<uint>() : Ar.Read<TIntVector3<uint>>(),
             "IntVector4" => type == ReadType.ZERO ? new TIntVector4<int>() : Ar.Read<TIntVector4<int>>(),
-            "UintVector4" => type == ReadType.ZERO ? new TIntVector4<uint>() : Ar.Read<TIntVector4<uint>>(),
+            "UintVector4" or "Uint32Vector4" => type == ReadType.ZERO ? new TIntVector4<uint>() : Ar.Read<TIntVector4<uint>>(),
             "Int64Vector2" or "Int64Point" => type == ReadType.ZERO ? new TIntVector2<long>() : Ar.Read<TIntVector2<long>>(),
             "UInt64Vector2" or "UInt64Point" => type == ReadType.ZERO ? new TIntVector2<ulong>() : Ar.Read<TIntVector2<ulong>>(),
             "Int64Vector" => type == ReadType.ZERO ? new TIntVector3<long>() : Ar.Read<TIntVector3<long>>(),
@@ -311,8 +311,8 @@ public class FScriptStruct
             "EveryPlatformBool" => new FEveryPlatformBool(Ar),
             "EveryPlatformInt" => new FEveryPlatformInt(Ar),
 
-            // Killing Floor 3
-            "HavokAIAnyArray" => new FHavokAIAnyArray(Ar),
+            // Killing Floor 3(AI), Gears of War E-Day(Nav)
+            "HavokAIAnyArray" or "HavokNavAnyArray" => new FHavokAnyArray(Ar, structName),
 
             // Upin&Ipin Universe
             "SUDSValue" => type == ReadType.ZERO ? new FStructFallback() : new FSUDSValue(Ar),
@@ -447,6 +447,11 @@ public class FScriptStruct
             "AISensingStatusTransition" when Ar.Game is GAME_ArcRaiders => new FStructFallback(Ar, "AISensingStatusTransitionStruct"),//hack for struct/class with the same name
 
             "BodyInstance" when Ar.Game is EGame.GAME_ConanExilesEnhanced => new FBodyInstance(Ar),
+
+            "TCPresentationCueNamedParam_Vector" or "TCPresentationCueNamedParam_Float" or "TCPresentationCueNamedParam_LinearColor"
+                or "TCGameplayBlackboardNamedParam_Float" or "TCGameplayBlackboardNamedParam_Vector" or "TCPresentationCueNamedParam_Bool"
+                or "TCPresentationCueNamedParam_Texture" or "TCPresentationCueNamedParam_Vector2D" or "TCPresentationCueNamedParam_Material"
+                or "TCPresentationCueNamedParam_StaticMesh" when Ar.Game is GAME_GearsofWarEDay => new FTCNamedParam(Ar, structName),
 
             _ => Ar.Game switch
             {

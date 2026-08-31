@@ -1,7 +1,6 @@
 using CUE4Parse.UE4.Assets.Objects;
 using CUE4Parse.UE4.Assets.Objects.Unversioned;
 using CUE4Parse.UE4.Assets.Readers;
-using CUE4Parse.UE4.Versions;
 using Newtonsoft.Json;
 
 namespace CUE4Parse.UE4.Assets.Exports.Wwise;
@@ -28,6 +27,12 @@ public class UAkAudioBank : UAkAudioType
             case GAME_CenturyAgeofAshes:
             {
                 var idk = new FStructFallback(Ar, "AkAudioBank", new FRawHeader([(2, 1)], ERawHeaderFlags.RawProperties));
+                Properties.AddRange(idk.Properties);
+                return;
+            }
+            case GAME_GearsofWarEDay:
+            {
+                var idk = new FStructFallback(Ar, "AkAudioBank", new FRawHeader([(0, -1)], ERawHeaderFlags.RawProperties  | ERawHeaderFlags.Reverse));
                 Properties.AddRange(idk.Properties);
                 return;
             }
