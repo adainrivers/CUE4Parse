@@ -139,11 +139,9 @@ public abstract class MeshDto<TVertex> : ObjectDto where TVertex : struct, IMesh
             }
         }
 
-        // aggressively garbage collect since the asset is re-parsed every time by FModel
-        // we don't need most of this data to still exist post mesh export anyway.
-        // we also don't want that to json serialize anyway since 400mb+ json files are no fun.
+        // Release decoded pages so they are not retained or serialized after conversion.
+        // Let the runtime schedule garbage collection instead of forcing a full collection per mesh.
         nanite.UnloadAllPages();
-        GC.Collect();
 
         void Clamp(ref uint materialIndex)
         {
