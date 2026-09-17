@@ -79,24 +79,25 @@ public class UClass : UStruct
             type = typeof(Assets.Exports.UObject);
         }
 
-        if (type != null)
+        return type != null ? ConstructObject(type) : null;
+    }
+
+    /// <summary>Instantiates a registered native type, or null when construction fails.</summary>
+    public static Assets.Exports.UObject? ConstructObject(Type type)
+    {
+        try
         {
-            try
+            var instance = Activator.CreateInstance(type);
+            if (instance is Assets.Exports.UObject obj)
             {
-                var instance = Activator.CreateInstance(type);
-                if (instance is Assets.Exports.UObject obj)
-                {
-                    return obj;
-                }
-                else
-                {
-                    Log.Warning("Class {Type} did have a valid constructor but does not inherit UObject", type);
-                }
+                return obj;
             }
-            catch (Exception e)
-            {
-                Log.Warning(e, "Class {Type} could not be constructed", type);
-            }
+
+            Log.Warning("Class {Type} did have a valid constructor but does not inherit UObject", type);
+        }
+        catch (Exception e)
+        {
+            Log.Warning(e, "Class {Type} could not be constructed", type);
         }
 
         return null;
