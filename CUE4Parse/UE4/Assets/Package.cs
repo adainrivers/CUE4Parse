@@ -27,6 +27,9 @@ namespace CUE4Parse.UE4.Assets
 
         public FObjectImport[] ImportMap { get; }
         public FObjectExport[] ExportMap { get; }
+        // Import resolution walks outer chains and scans the imported package's export
+        // map by name; memoized per import slot since FPackageIndex only caches weakly.
+        private ResolvedObject?[]? _resolvedImports;
         public FPackageIndex[][]? DependsMap { get; }
         public FPackageIndex[]? PreloadDependencies { get; }
         public FObjectDataResource[]? DataResourceMap { get; }
@@ -334,7 +337,10 @@ namespace CUE4Parse.UE4.Assets
             if (index == null || index.IsNull)
                 return null;
             if (index.IsImport && -index.Index - 1 < ImportMap.Length)
-                return ResolveImport(index);
+            {
+                var resolvedImports = LazyInitializer.EnsureInitialized(ref _resolvedImports, () => new ResolvedObject?[ImportMap.Length]);
+                return resolvedImports[-index.Index - 1] ??= ResolveImport(index);
+            }
             if (index.IsExport && index.Index - 1 < ExportMap.Length)
                 return new ResolvedExportObject(index.Index - 1, this);
             return null;
