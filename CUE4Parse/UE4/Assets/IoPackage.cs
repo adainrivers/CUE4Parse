@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using CUE4Parse.FileProvider.Vfs;
 using CUE4Parse.UE4.Assets.Exports;
@@ -31,6 +32,12 @@ public sealed class IoPackage : AbstractUePackage
     public readonly FBulkDataMapEntry[] BulkDataMap;
     public readonly Lazy<IoPackage?[]> ImportedPackages;
     public readonly Lazy<IPackage?[][]> ImportedPackagesAllVersions;
+
+    // Every FPackageIndex serialized to JSON resolves its import, and FPackageIndex only
+    // caches the result in a WeakReference. Without these, each resolution rescans the
+    // imported package's export map for the matching public export hash.
+    private ConcurrentDictionary<FPackageObjectIndex, ResolvedObject?>? _resolvedPackageImports;
+    private Dictionary<ulong, int>? _exportIndexByPublicHash;
 
     public IoPackage(FArchive uasset, FIoContainerHeader? containerHeader = null, FArchive? ubulk = null, FArchive? uptnl = null, IVfsFileProvider? provider = null)
         : this(
@@ -474,94 +481,20 @@ public sealed class IoPackage : AbstractUePackage
 
         if (index.IsPackageImport)
         {
-            if (ImportedPublicExportHashes != null)
+            var memo = LazyInitializer.EnsureInitialized(ref _resolvedPackageImports);
+            if (memo.TryGetValue(index, out var cached))
             {
-                var packageImportRef = index.AsPackageImportRef;
-                var importedPackages = ImportedPackages.Value;
-                if (packageImportRef.ImportedPackageIndex < importedPackages.Length)
-                {
-                    var pkg = importedPackages[packageImportRef.ImportedPackageIndex];
-                    if (pkg != null)
-                    {
-                        for (int exportIndex = 0; exportIndex < pkg.ExportMap.Length; ++exportIndex)
-                        {
-                            if (pkg.ExportMap[exportIndex].PublicExportHash == ImportedPublicExportHashes[packageImportRef.ImportedPublicExportHashIndex])
-                            {
-                                return new ResolvedExportObject(exportIndex, pkg);
-                            }
-                        }
-                    }
-
-                    // search all previous versions
-                    var importedPackagesAllVersions = ImportedPackagesAllVersions.Value;
-                    var packages = importedPackagesAllVersions[packageImportRef.ImportedPackageIndex];
-                    foreach (var asset in packages)
-                    {
-                        if (asset is IoPackage ioPackage)
-                        {
-                            for (int exportIndex = 0; exportIndex < ioPackage.ExportMap.Length; ++exportIndex)
-                            {
-                                if (ioPackage.ExportMap[exportIndex].PublicExportHash == ImportedPublicExportHashes[packageImportRef.ImportedPublicExportHashIndex])
-                                {
-                                    return new ResolvedExportObject(exportIndex, ioPackage);
-                                }
-                            }
-                        }
-                        else if (asset is Package package)
-                        {
-                            for (int exportIndex = 0; exportIndex < package.ExportMap.Length; ++exportIndex)
-                            {
-                                if (package.ExportMap[exportIndex].GetPublicExportHash() == ImportedPublicExportHashes[packageImportRef.ImportedPublicExportHashIndex])
-                                {
-                                    return new ResolvedPakExportObject(exportIndex, package);
-                                }
-                            }
-                        }
-                    }
-                }
+                return cached;
             }
-            else
+
+            var resolved = ResolvePackageImport(index);
+            if (resolved == null && Globals.WarnMissingImportPackage)
             {
-                foreach (var pkg in ImportedPackages.Value)
-                {
-                    if (pkg == null) continue;
-                    for (int exportIndex = 0; exportIndex < pkg.ExportMap.Length; ++exportIndex)
-                    {
-                        if (pkg.ExportMap[exportIndex].GlobalImportIndex == index)
-                        {
-                            return new ResolvedExportObject(exportIndex, pkg);
-                        }
-                    }
-                }
-
-                // search all previous versions
-                foreach (var packages in ImportedPackagesAllVersions.Value)
-                {
-                    foreach (var asset in packages)
-                    {
-                        if (asset is IoPackage ioPackage)
-                        {
-                            for (int exportIndex = 0; exportIndex < ioPackage.ExportMap.Length; ++exportIndex)
-                            {
-                                if (ioPackage.ExportMap[exportIndex].GlobalImportIndex == index)
-                                {
-                                    return new ResolvedExportObject(exportIndex, ioPackage);
-                                }
-                            }
-                        }
-                        else if (asset is Package package)
-                        {
-                            for (int exportIndex = 0; exportIndex < package.ExportMap.Length; ++exportIndex)
-                            {
-                                if (package.ExportMap[exportIndex].GetGlobalImportIndex() == index)
-                                {
-                                    return new ResolvedPakExportObject(exportIndex, package);
-                                }
-                            }
-                        }
-                    }
-                }
+                Log.Warning("Missing package import 0x{0:X} for package {1}", index.Value, Name);
             }
+
+            memo[index] = resolved;
+            return resolved;
         }
 
         if (Globals.WarnMissingImportPackage)
@@ -570,6 +503,113 @@ public sealed class IoPackage : AbstractUePackage
         }
 
         return null;
+    }
+
+    private ResolvedObject? ResolvePackageImport(FPackageObjectIndex index)
+    {
+        if (ImportedPublicExportHashes != null)
+        {
+            var packageImportRef = index.AsPackageImportRef;
+            var importedPackages = ImportedPackages.Value;
+            if (packageImportRef.ImportedPackageIndex < importedPackages.Length)
+            {
+                var hash = ImportedPublicExportHashes[packageImportRef.ImportedPublicExportHashIndex];
+                var pkg = importedPackages[packageImportRef.ImportedPackageIndex];
+                if (pkg != null && pkg.FindExportByPublicHash(hash) is var exportIndex and >= 0)
+                {
+                    return new ResolvedExportObject(exportIndex, pkg);
+                }
+
+                // search all previous versions
+                var importedPackagesAllVersions = ImportedPackagesAllVersions.Value;
+                var packages = importedPackagesAllVersions[packageImportRef.ImportedPackageIndex];
+                foreach (var asset in packages)
+                {
+                    if (asset is IoPackage ioPackage)
+                    {
+                        if (ioPackage.FindExportByPublicHash(hash) is var versionExportIndex and >= 0)
+                        {
+                            return new ResolvedExportObject(versionExportIndex, ioPackage);
+                        }
+                    }
+                    else if (asset is Package package)
+                    {
+                        for (int i = 0; i < package.ExportMap.Length; ++i)
+                        {
+                            if (package.ExportMap[i].GetPublicExportHash() == hash)
+                            {
+                                return new ResolvedPakExportObject(i, package);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            foreach (var pkg in ImportedPackages.Value)
+            {
+                if (pkg == null) continue;
+                for (int exportIndex = 0; exportIndex < pkg.ExportMap.Length; ++exportIndex)
+                {
+                    if (pkg.ExportMap[exportIndex].GlobalImportIndex == index)
+                    {
+                        return new ResolvedExportObject(exportIndex, pkg);
+                    }
+                }
+            }
+
+            // search all previous versions
+            foreach (var packages in ImportedPackagesAllVersions.Value)
+            {
+                foreach (var asset in packages)
+                {
+                    if (asset is IoPackage ioPackage)
+                    {
+                        for (int exportIndex = 0; exportIndex < ioPackage.ExportMap.Length; ++exportIndex)
+                        {
+                            if (ioPackage.ExportMap[exportIndex].GlobalImportIndex == index)
+                            {
+                                return new ResolvedExportObject(exportIndex, ioPackage);
+                            }
+                        }
+                    }
+                    else if (asset is Package package)
+                    {
+                        for (int exportIndex = 0; exportIndex < package.ExportMap.Length; ++exportIndex)
+                        {
+                            if (package.ExportMap[exportIndex].GetGlobalImportIndex() == index)
+                            {
+                                return new ResolvedPakExportObject(exportIndex, package);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Index of the first export whose PublicExportHash matches, or -1. The map is built on
+    /// first use; first occurrence wins, matching the linear scan it replaces.
+    /// </summary>
+    private int FindExportByPublicHash(ulong hash)
+    {
+        var map = _exportIndexByPublicHash;
+        if (map == null)
+        {
+            map = new Dictionary<ulong, int>(ExportMap.Length);
+            for (var i = 0; i < ExportMap.Length; i++)
+            {
+                map.TryAdd(ExportMap[i].PublicExportHash, i);
+            }
+
+            map = Interlocked.CompareExchange(ref _exportIndexByPublicHash, map, null) ?? map;
+        }
+
+        return map.TryGetValue(hash, out var exportIndex) ? exportIndex : -1;
     }
 
     private class ResolvedPakExportObject : ResolvedObject
