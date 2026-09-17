@@ -6,6 +6,7 @@ using CUE4Parse.MappingsProvider;
 using CUE4Parse.UE4.Assets.Exports;
 using CUE4Parse.UE4.Assets.Readers;
 using CUE4Parse.UE4.Exceptions;
+using CUE4Parse.UE4.Objects.Engine;
 using CUE4Parse.UE4.Objects.UObject;
 using Newtonsoft.Json;
 
@@ -42,37 +43,78 @@ public abstract class AbstractUePackage : UObject, IPackage
         Flags |= EObjectFlags.RF_WasLoaded;
     }
 
+    /// <summary>Upper bound on class-chain walks, guarding against cyclic metadata.</summary>
+    private const int MaxClassChainDepth = 64;
+
     public UObject ConstructObject(ResolvedObject? struc, IPackage? owner = null, EObjectFlags flags = EObjectFlags.RF_NoFlags)
     {
         UObject? obj = null;
         var mappings = owner?.Mappings;
-        var current = struc?.Object?.Value as UStruct;
 
-        while (current != null) // Traverse up until a known one is found
+        // Walk the class chain through export/import map metadata only. Loading the class
+        // objects themselves would force a full load of every referenced Blueprint class
+        // package (and each of its parents) for every export that uses it, when all this
+        // needs is the chain of class names up to the first one registered in code.
+        var current = struc?.Object != null ? struc : null;
+        for (var depth = 0; current != null && depth < MaxClassChainDepth; depth++)
         {
-            if (current is UClass scriptClass)
+            var type = ObjectTypeRegistry.Get(current.Name.Text);
+            if (type is null && flags.HasFlag(EObjectFlags.RF_ClassDefaultObject) && IsBlueprintGeneratedClass(current, mappings))
+            {
+                type = typeof(UObject);
+            }
+
+            if (type != null)
             {
                 // We know this is a class defined in code at this point
-                obj = scriptClass.ConstructObject(flags);
+                obj = UClass.ConstructObject(type);
                 if (obj != null)
                     break;
             }
 
-            var previous = current;
-            current = current.SuperStruct?.Load<UStruct>();
-
-            if (current is null && mappings is not null && mappings.Types.TryGetValue(previous.Name, out var structMappings))
-            {
-                // added guard for infinite loop
-                if (string.IsNullOrEmpty(structMappings.SuperType) || previous.Name == structMappings.SuperType) break;
-                current = new UScriptClass(structMappings.SuperType);
-            }
+            current = NextInClassChain(current, mappings);
         }
 
         obj ??= new UObject();
         obj.Class = struc;
         obj.Flags |= EObjectFlags.RF_WasLoaded;
         return obj;
+    }
+
+    /// <summary>
+    /// Parent class from the export map's SuperIndex; falls back to the usmap SuperType
+    /// for script classes, whose parents are not serialized in any package.
+    /// </summary>
+    private static ResolvedObject? NextInClassChain(ResolvedObject current, TypeMappings? mappings)
+    {
+        var super = current.Super;
+        if (super != null || mappings is null) return super;
+
+        var name = current.Name.Text;
+        if (!mappings.Types.TryGetValue(name, out var structMappings)) return null;
+        // added guard for infinite loop
+        if (string.IsNullOrEmpty(structMappings.SuperType) || name == structMappings.SuperType) return null;
+        return new ResolvedLoadedObject(new UScriptClass(structMappings.SuperType));
+    }
+
+    /// <summary>
+    /// Whether the given class would deserialize as a UBlueprintGeneratedClass (or subclass),
+    /// decided from its own class chain without loading it.
+    /// </summary>
+    private static bool IsBlueprintGeneratedClass(ResolvedObject cls, TypeMappings? mappings)
+    {
+        var current = cls.Class;
+        for (var depth = 0; current != null && depth < MaxClassChainDepth; depth++)
+        {
+            if (ObjectTypeRegistry.Get(current.Name.Text) is { } type)
+            {
+                return typeof(UBlueprintGeneratedClass).IsAssignableFrom(type);
+            }
+
+            current = NextInClassChain(current, mappings);
+        }
+
+        return false;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
