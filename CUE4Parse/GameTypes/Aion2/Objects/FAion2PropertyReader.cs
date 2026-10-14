@@ -50,6 +50,8 @@ public static class FAion2PropertyReader
         {
             var pos = Ar.Position;
             var length = Ar.Read<int>();
+            if (length < 0 || length > Ar.Length - Ar.Position)
+                throw new ParserException(Ar, $"Invalid element count {length}");
             for (int i = 0; i < length; i++)
             {
                 ReadPropertyTagType(Ar, mappings, tagData?.InnerType, tagData?.InnerTypeData, true, ReadType.ARRAY);
@@ -61,6 +63,8 @@ public static class FAion2PropertyReader
         UScriptArray ReadArray(FAion2DatFileArchive Ar, TypeMappings mappings, FPropertyTagData? tagData, bool readtag = true)
         {
             var length = Ar.Read<int>();
+            if (length < 0 || length > Ar.Length - Ar.Position)
+                throw new ParserException(Ar, $"Invalid element count {length}");
             var properties = new List<FPropertyTagType>(length);
             if (readtag && tagData?.InnerType is "StructProperty")
                 SkipStructTag(Ar);
@@ -79,11 +83,15 @@ public static class FAion2PropertyReader
         UScriptMap ReadMap(FAion2DatFileArchive Ar, TypeMappings mappings, FPropertyTagData? tagData)
         {
             var length = Ar.Read<int>();
+            if (length < 0 || length > Ar.Length - Ar.Position)
+                throw new ParserException(Ar, $"Invalid element count {length}");
             for (int i = 0; i < length; i++)
             {
                 ReadPropertyTagType(Ar, mappings, tagData?.InnerType, tagData?.InnerTypeData, true, ReadType.MAP);
             }
             length = Ar.Read<int>();
+            if (length < 0 || length > Ar.Length - Ar.Position)
+                throw new ParserException(Ar, $"Invalid element count {length}");
             var properties = new Dictionary<FPropertyTagType, FPropertyTagType?>(length);
             for (int i = 0; i < length; i++)
             {

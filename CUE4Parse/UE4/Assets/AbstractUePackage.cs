@@ -126,6 +126,7 @@ public abstract class AbstractUePackage : UObject, IPackage
         {
             if (serialSize == 0) return; // Empty Export
             obj.Deserialize(Ar, validPos);
+            Globals.ExportReadEnd?.Invoke(obj, validPos - Ar.Position);
 #if DEBUG
             var remaining = validPos - Ar.Position;
             switch (remaining)
