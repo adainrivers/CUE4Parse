@@ -26,11 +26,12 @@ public sealed class FAion2DatFileArchive(byte[] data, VersionContainer versions)
         if (length == 0)
             return string.Empty;
 
-        var strLength = length > 0 ? length : -length * sizeof(ushort);
+        // A misread length (wrong layout) can overflow -length * 2 to a negative size: stackalloc of it overflows the stack.
+        var strLength = length > 0 ? (long) length : -(long) length * sizeof(ushort);
         if (strLength > Length - Position)
             throw new ParserException($"Invalid string length '{strLength}'");
 
-        Span<byte> strBuffer = strLength <= 1024 ? stackalloc byte[strLength] : new byte[strLength];
+        Span<byte> strBuffer = strLength <= 1024 ? stackalloc byte[(int) strLength] : new byte[strLength];
         ReadExactly(strBuffer);
 
         if (xorKey is not null)
