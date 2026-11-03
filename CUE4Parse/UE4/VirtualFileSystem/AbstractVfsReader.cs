@@ -74,7 +74,7 @@ namespace CUE4Parse.UE4.VirtualFileSystem
 
         private void VerifyReadOrder()
         {
-            ReadOrder = GetPakOrderFromPakFilePath();
+            ReadOrder = GetPakOrderFromPakFilePath(Path);
             if (!Name.EndsWith("_P.pak", StringComparison.OrdinalIgnoreCase) && !Name.EndsWith("_P.utoc", StringComparison.OrdinalIgnoreCase) && !Name.EndsWith("_P.o.utoc", StringComparison.OrdinalIgnoreCase))
                 return;
 
@@ -97,8 +97,22 @@ namespace CUE4Parse.UE4.VirtualFileSystem
             ReadOrder += 100 * chunkVersionNumber;
         }
 
-        private int GetPakOrderFromPakFilePath()
+        /// <summary>
+        /// Base read order of a container from its install folder; patch chunk versions add 100 per
+        /// version on top, so this only breaks ties between paks of the same version. Launcher
+        /// hot-patch layers ship such ties (Infinity Nikki: Saved/Paks and Saved/FastPatchPaks both
+        /// carry *_2872_P paks with different copies of the same files), and the newest layer wins:
+        /// Saved/FastPatchPaks > Saved/Paks > everything else.
+        /// </summary>
+        public static int GetPakOrderFromPakFilePath(string path)
         {
+            var normalized = path.Replace('\\', '/');
+            if (normalized.Contains("/Saved/FastPatchPaks/", StringComparison.OrdinalIgnoreCase))
+                return 5;
+            if (normalized.Contains("/Saved/Paks/", StringComparison.OrdinalIgnoreCase))
+                return 4;
+
+
             // if (Path.StartsWith($"{FPaths.ProjectContentDir()}Paks/{FApp.GetProjectName()}-"))
             // {
             //     // ProjectName/Content/Paks/ProjectName-
