@@ -89,12 +89,46 @@ namespace CUE4Parse.UE4.VirtualFileSystem
                     var versionString = Name.Substring(versionStartIndex, versionEndIndex - versionStartIndex);
                     if (int.TryParse(versionString, out var chunkVersionSigned) && chunkVersionSigned >= 1)
                     {
+                        if (Game == GAME_InfinityNikki)
+                        {
+                            ReadOrder = GetInfinityNikkiReadOrder(chunkVersionSigned, versionStartIndex);
+                            return;
+                        }
+
                         // Increment by one so that the first patch file still gets more priority than the base pak file
                         chunkVersionNumber = (uint)chunkVersionSigned + 1;
                     }
                 }
             }
             ReadOrder += 100 * chunkVersionNumber;
+        }
+
+        private long GetInfinityNikkiReadOrder(int build, int versionStartIndex)
+        {
+            // The trailing number is a build, not the incremental hot-patch index.
+            // Keep the build in the high 32 bits so stale FastPatchPaks never beat a newer install.
+            var path = "/" + Path.Replace('\\', '/');
+            var isSaved = path.Contains("/Saved/Paks/", StringComparison.OrdinalIgnoreCase);
+            var isContent = path.Contains("/Content/Paks/", StringComparison.OrdinalIgnoreCase);
+            var isPatchPak = Name.StartsWith("PatchPak_", StringComparison.OrdinalIgnoreCase);
+            var isFastPatch = path.Contains("/Saved/FastPatchPaks/", StringComparison.OrdinalIgnoreCase) ||
+                (isPatchPak && !isSaved && !isContent);
+            long priority = isFastPatch ? 1L << 31 : isSaved ? 1 : 0;
+
+            if (isFastPatch && isPatchPak)
+            {
+                var patchEndIndex = versionStartIndex - 1;
+                var patchStartIndex = Name.LastIndexOf('_', patchEndIndex - 1) + 1;
+                if (patchStartIndex > "PatchPak_".Length &&
+                    int.TryParse(Name.AsSpan(patchStartIndex, patchEndIndex - patchStartIndex), out var patchIndex) &&
+                    patchIndex >= 0)
+                {
+                    // PatchPak_<Group>_<index>_<build>_P; missing files still fall through to older paks.
+                    priority += patchIndex;
+                }
+            }
+
+            return ((long) build << 32) | priority;
         }
 
         /// <summary>
