@@ -21,20 +21,29 @@ public sealed partial class Aion2DatFileEncryption
         var header = new FL10NHeader(Ar, seed);
         if (header.EncryptionType != EEncryptionType.CompressedAES)
             throw new ParserException($"Unsupported AION2 L10N encryption type '{header.EncryptionType}'");
-        if (!AesKeys.TryGetValue(seed, out var key))
-            throw new ParserException("AION2 L10N encryption key not found in manifest");
+        if (header.PackedSize < 0 || header.RawSize < 0 || header.AlignedSize < 0x20 + header.PackedSize)
+            throw new ParserException("Invalid AION2 L10N container header");
 
         var encryptedMemory = Ar.ReadMemory(header.AlignedSize);
         if (!MemoryMarshal.TryGetArray(encryptedMemory, out ArraySegment<byte> encrypted))
             throw new ParserException("AION2 L10N payload is not backed by an array");
 
-        var decrypted = encrypted.Decrypt(key);
         var output = new byte[header.RawSize];
-        var written = LZ4Codec.Decode(decrypted.AsSpan(0x20, header.PackedSize), output);
-        if (written != output.Length)
-            throw new ParserException($"AION2 L10N LZ4 decode failed ({written}/{output.Length})");
+        var tried = 0;
+        var written = 0;
+        foreach (var key in GetL10NKeys(seed, locale))
+        {
+            tried++;
+            var decrypted = encrypted.Decrypt(key);
+            written = LZ4Codec.Decode(decrypted.AsSpan(0x20, header.PackedSize), output);
+            if (written == output.Length)
+                return output;
+        }
 
-        return output;
+        if (tried == 0)
+            throw new ParserException($"AION2 L10N encryption key not found for locale '{locale}'");
+
+        throw new ParserException($"AION2 L10N LZ4 decode failed ({written}/{output.Length})");
     }
 
     private static string GetL10NLocale(string filePath)
