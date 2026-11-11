@@ -67,6 +67,10 @@ public sealed partial class Aion2DatFileEncryption
 
     private static byte[] DecryptCompressedDataTable(GenericBufferReader Ar, FDataTableHeader header, FAesKey key)
     {
+        if (header.AlignedSize <= 0 || header.AlignedSize > Ar.Length - Ar.Position ||
+            header.PackedSize <= 0 || header.PackedSize > header.AlignedSize - 0x20 || header.RawSize <= 0)
+            throw new ParserException("Invalid AION2 data table payload sizes");
+
         var encryptedMemory = Ar.ReadMemory(header.AlignedSize);
         if (!MemoryMarshal.TryGetArray(encryptedMemory, out ArraySegment<byte> encrypted))
             throw new ParserException("AION2 data table payload is not backed by an array");
@@ -78,6 +82,24 @@ public sealed partial class Aion2DatFileEncryption
             throw new ParserException($"AION2 data table LZ4 decode failed ({written}/{output.Length})");
 
         return output;
+    }
+
+    // Field order of the versioned compressed headers: BLAKE3(root || 0x51) drives a Fisher-Yates shuffle.
+    private static void GetHeaderPermutation(Span<byte> permutation)
+    {
+        Span<byte> input = stackalloc byte[12];
+        BinaryPrimitives.WriteUInt64LittleEndian(input, _headerPermutationRoot);
+        BinaryPrimitives.WriteInt32LittleEndian(input[8..], 0x51);
+        using var hasher = Hasher.New();
+        hasher.Update(input);
+        var shuffle = hasher.Finalize().AsSpan();
+
+        for (var i = 0; i < 4; i++) permutation[i] = (byte) i;
+        for (var i = 3; i > 0; i--)
+        {
+            var other = shuffle[3 - i] % (i + 1);
+            (permutation[i], permutation[other]) = (permutation[other], permutation[i]);
+        }
     }
 
     private readonly struct FDataTableHeader
@@ -94,6 +116,47 @@ public sealed partial class Aion2DatFileEncryption
             var compressedPrefix = encodedPrefix.AsSpan().ToArray();
             var compressedKey = DeriveHeaderKey(seed, EHeaderType.CompressedDataTable);
             FAion2DatFileArchive.DecryptData(compressedPrefix, compressedKey);
+
+            if (_useHeaderPermutation)
+            {
+                // The versioned client shuffles the four compressed header fields like the L10N header,
+                // so the encryption type can sit in either half: decode both halves before deciding.
+                OutputSize = 0;
+                PackedSize = 0;
+                AlignedSize = 0;
+                RawSize = 0;
+                if (Ar.Length - Ar.Position >= 8)
+                {
+                    var suffixPosition = Ar.Position;
+                    var encodedSuffix = Ar.ReadArray<byte>(8);
+                    FAion2DatFileArchive.DecryptData(encodedSuffix, compressedKey[8..16]);
+
+                    Span<byte> permutation = stackalloc byte[4];
+                    GetHeaderPermutation(permutation);
+                    Span<int> fields = stackalloc int[4];
+                    for (var i = 0; i < 4; i++)
+                    {
+                        var half = i < 2 ? compressedPrefix : encodedSuffix;
+                        fields[permutation[i]] = BinaryPrimitives.ReadInt32LittleEndian(half.AsSpan(i % 2 * 4));
+                    }
+
+                    if ((EEncryptionType) fields[0] == EEncryptionType.CompressedAES)
+                    {
+                        EncryptionType = EEncryptionType.CompressedAES;
+                        RawSize = fields[1];
+                        PackedSize = fields[2];
+                        AlignedSize = fields[3];
+                        return;
+                    }
+
+                    Ar.Position = suffixPosition;
+                }
+
+                FAion2DatFileArchive.DecryptData(encodedPrefix, DeriveHeaderKey(seed, EHeaderType.StreamDataTable));
+                OutputSize = BinaryPrimitives.ReadInt32LittleEndian(encodedPrefix);
+                EncryptionType = (EEncryptionType) BinaryPrimitives.ReadInt32LittleEndian(encodedPrefix.AsSpan(4));
+                return;
+            }
 
             using var prefixAr = new GenericBufferReader(compressedPrefix);
             PackedSize = prefixAr.Read<int>();
