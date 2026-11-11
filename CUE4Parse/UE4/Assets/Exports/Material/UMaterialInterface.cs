@@ -23,15 +23,15 @@ public class UMaterialInterface : UUnrealMaterial
 
     public FStructFallback? CachedExpressionData;
     public FMaterialTextureInfo[] TextureStreamingData = Array.Empty<FMaterialTextureInfo>();
-    public List<FMaterialResource> LoadedMaterialResources = new();
+    public List<FMaterialResource>? LoadedMaterialResources { get; private set; }
 
     public override void Deserialize(FAssetArchive Ar, long validPos)
     {
         if(Ar.Game == GAME_WorldofJadeDynasty) Ar.Position += 24;
         base.Deserialize(Ar, validPos);
-        bUseMobileSpecular = GetOrDefault<bool>(nameof(bUseMobileSpecular));
-        MobileSpecularPower = GetOrDefault<float>(nameof(MobileSpecularPower));
-        MobileSpecularMask = GetOrDefault<EMobileSpecularMask>(nameof(MobileSpecularMask));
+        bUseMobileSpecular = GetOrDefault(nameof(bUseMobileSpecular), bUseMobileSpecular);
+        MobileSpecularPower = GetOrDefault(nameof(MobileSpecularPower), MobileSpecularPower);
+        MobileSpecularMask = GetOrDefault(nameof(MobileSpecularMask), MobileSpecularMask);
         FlattenedTexture = GetOrDefault<FPackageIndex?>(nameof(FlattenedTexture));
         MobileBaseTexture = GetOrDefault<FPackageIndex?>(nameof(MobileBaseTexture));
         MobileNormalTexture = GetOrDefault<FPackageIndex?>(nameof(MobileNormalTexture));
@@ -165,28 +165,29 @@ public class UMaterialInterface : UUnrealMaterial
         }
     }
 
-    public void DeserializeInlineShaderMaps(FAssetArchive Ar, ICollection<FMaterialResource> loadedResources)
+    protected void DeserializeInlineShaderMaps(FAssetArchive Ar)
     {
         var numLoadedResources = Ar.Read<int>();
         if (numLoadedResources > 0)
         {
             FMaterialResourceProxyReader resourceAr;
-            if (Ar.Game != GAME_Stalker2)
+            if (Ar.Game is GAME_Stalker2)
             {
-                resourceAr = new FMaterialResourceProxyReader(Ar);
+                var ShaderMaps = new FByteBulkData(Ar);
+                using var ShaderMapsAr = new FByteArchive("ShaderMaps", ShaderMaps.Data!, Ar.Versions);
+                resourceAr = new FMaterialResourceProxyReader(ShaderMapsAr);
             }
             else
             {
-                var ShaderMaps = new FByteBulkData(Ar);
-                using var ShaderMapsAr = new FByteArchive("ShaderMaps", ShaderMaps.Data, Ar.Versions);
-                resourceAr = new FMaterialResourceProxyReader(ShaderMapsAr);
+                resourceAr = new FMaterialResourceProxyReader(Ar);
             }
 
+            LoadedMaterialResources = new List<FMaterialResource>(numLoadedResources);
             for (var resourceIndex = 0; resourceIndex < numLoadedResources; ++resourceIndex)
             {
                 var loadedResource = new FMaterialResource();
                 loadedResource.DeserializeInlineShaderMap(resourceAr);
-                loadedResources.Add(loadedResource);
+                LoadedMaterialResources.Add(loadedResource);
             }
         }
     }

@@ -1,5 +1,4 @@
 using CUE4Parse.GameTypes.FF7.Assets.Objects;
-using CUE4Parse.GameTypes.Tencent.GangstarMirageCity.Objects.Meshes;
 using CUE4Parse.UE4.Assets.Objects;
 using CUE4Parse.UE4.Assets.Readers;
 using CUE4Parse.UE4.Objects.Core.Math;
@@ -68,7 +67,7 @@ public class FStaticMeshLODResources
             MaxDeviation = Ar.Read<float>();
         }
 
-        if (Ar.Game is GAME_ThePathless or GAME_ARKSurvivalAscended) Ar.Position += 4;
+        if (Ar.Game is GAME_ThePathless or GAME_ARKSurvivalAscended or GAME_MonsterHunterOutlanders) Ar.Position += 4;
         if (Ar.Game == GAME_NeedForSpeedMobile)
         {
             Ar.SkipFixedArray(36);
@@ -160,7 +159,7 @@ public class FStaticMeshLODResources
                 var rawDataHeaderSize = Ar.Game >= GAME_UE5_6 ? 6 * 4 : 0; // RawDataHeader = 6x uint32
                 Ar.Position += rawDataHeaderSize + Ar.Game switch
                 {
-                    GAME_TheFinals or GAME_ArcRaiders => 12,
+                    GAME_TheFinals or GAME_TheFinalsTencent or GAME_ArcRaiders => 12,
                     GAME_ArenaBreakoutMobile or GAME_GangstarMirageCity => 44,
                     GAME_NeedForSpeedMobile => 32,
                     GAME_SuicideSquad => 29,
@@ -178,7 +177,7 @@ public class FStaticMeshLODResources
             // uint32 ReversedIBsSize       = 0;
             Ar.Position += 12;
 
-            if (Ar.Game is GAME_StarWarsJediSurvivor or GAME_TheFinals or GAME_ArcRaiders) Ar.Position += 4;
+            if (Ar.Game is GAME_StarWarsJediSurvivor or GAME_TheFinals or GAME_TheFinalsTencent or GAME_ArcRaiders) Ar.Position += 4;
             if (Ar.Game is GAME_NeedForSpeedMobile)
             {
                 var count = Ar.Read<int>();
@@ -315,7 +314,7 @@ public class FStaticMeshLODResources
     {
         var stripDataFlags = new FStripDataFlags(Ar);
 
-        PositionVertexBuffer = Ar.Game is GAME_GangstarMirageCity ? new FGangstarPositionVertexBuffer(Ar) : new FPositionVertexBuffer(Ar);
+        PositionVertexBuffer = new FPositionVertexBuffer(Ar);
         VertexBuffer = new FStaticMeshVertexBuffer(Ar);
         ColorVertexBuffer = new FColorVertexBuffer(Ar);
 
@@ -360,7 +359,7 @@ public class FStaticMeshLODResources
         {
             Ar.SkipMultipleBulkArrayData(4);
         }
-        if (Ar.Game is GAME_TheFinals or GAME_ArcRaiders)
+        if (Ar.Game is GAME_TheFinals or GAME_TheFinalsTencent or GAME_ArcRaiders)
         {
             _ = new FRawStaticIndexBuffer(Ar);
             Ar.Position += 4; // Vert count

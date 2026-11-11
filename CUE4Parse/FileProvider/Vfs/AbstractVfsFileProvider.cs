@@ -14,6 +14,7 @@ using CUE4Parse.GameTypes.DreamStar.Encryption.Aes;
 using CUE4Parse.GameTypes.Embark.Encryption.Aes;
 using CUE4Parse.GameTypes.INikki.Encryption.Aes;
 using CUE4Parse.GameTypes.MindsEye.Encryption.Aes;
+using CUE4Parse.GameTypes.MonsterHunterOutlanders.Encryption.Aes;
 using CUE4Parse.GameTypes.NetEase.MAR.Encryption.Aes;
 using CUE4Parse.GameTypes.NFS.Mobile.Encryption.Aes;
 using CUE4Parse.GameTypes.NMZ.Encryption.Aes;
@@ -97,7 +98,7 @@ namespace CUE4Parse.FileProvider.Vfs
                 GAME_ArenaBreakoutInfinite or GAME_ArenaBreakoutMobile => ABIDecryption.ABIDecrypt,
                 GAME_BloodBowl3 => BloodBowl3Aes.BloodBowl3Decrypt,
                 GAME_AssaultFireFuture => AssaultFireFutureAes.AssaultFireFutureDecrypt,
-                GAME_ArcRaiders or GAME_TheFinals => EmbarkAes.EmbarkDecrypt,
+                GAME_ArcRaiders or GAME_TheFinals or GAME_TheFinalsTencent => EmbarkAes.EmbarkDecrypt,
                 GAME_RocoKingdomWorld => RocoKingdomWorldAes.RocoKingdomWorldDecrypt,
                 GAME_DragonSwordAwakening => DragonSwordAes.DragonSwordDecrypt,
                 GAME_eBaseballProSpirit => ProSpiEncryption.ProSpiDecrypt,
@@ -106,6 +107,7 @@ namespace CUE4Parse.FileProvider.Vfs
                 GAME_PUBGMobile or GAME_PUBGLite => PUBGMobileAes.PUBGMobileDecrypt,
                 GAME_GangstarMirageCity => GangstarMirageCityAes.GangstarMirageCityDecrypt,
                 GAME_ChasingKaleidoRIDER => CKREncryption.CKRDecrypt,
+                GAME_MonsterHunterOutlanders => MonsterHunterOutlandersAes.MonsterHunterOutlandersDecrypt,
                 _ => null
             };
         }

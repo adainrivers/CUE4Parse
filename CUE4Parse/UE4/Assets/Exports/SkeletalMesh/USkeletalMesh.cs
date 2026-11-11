@@ -1,4 +1,3 @@
-using CUE4Parse.GameTypes.Tencent.GangstarMirageCity.Objects.Meshes;
 using CUE4Parse.UE4.Assets.Exports.Animation;
 using CUE4Parse.UE4.Assets.Exports.Engine;
 using CUE4Parse.UE4.Assets.Exports.Nanite;
@@ -8,6 +7,7 @@ using CUE4Parse.UE4.Assets.Objects.Properties;
 using CUE4Parse.UE4.Assets.Readers;
 using CUE4Parse.UE4.Objects.Core.Math;
 using CUE4Parse.UE4.Objects.Core.Misc;
+using CUE4Parse.UE4.Objects.Meshes;
 using CUE4Parse.UE4.Objects.Engine;
 using CUE4Parse.UE4.Objects.UObject;
 using CUE4Parse.UE4.Versions;
@@ -180,7 +180,7 @@ public partial class USkeletalMesh : USkinnedAsset
                         fallbackLODModels[i].SerializeRenderItem(Ar, bHasVertexColors, NumVertexColorChannels);
                     }
 
-                    LODModels = LODModels.Concat(fallbackLODModels).ToArray();
+                    LODModels = [.. LODModels, .. fallbackLODModels];
                 }
 
                 switch (Ar.Game)
@@ -188,10 +188,10 @@ public partial class USkeletalMesh : USkinnedAsset
                     case GAME_GangstarMirageCity:
                         foreach (var lod in LODModels)
                         {
-                            if (lod.AdditionalBuffer is not FGangstarPositionVertexBuffer positions || lod.VertexBufferGPUSkin?.VertsFloat == null)
+                            if (lod.AdditionalBuffer is not FPositionVertexBuffer positions || lod.VertexBufferGPUSkin?.VertsFloat == null)
                                 continue;
 
-                            positions.Decode(ImportedBounds);
+                            positions.ApplyBounds(ImportedBounds);
                             for (var i = 0; i < lod.VertexBufferGPUSkin.VertsFloat.Length; i++)
                             {
                                 lod.VertexBufferGPUSkin.VertsFloat[i].Pos = positions.Verts[i];
@@ -203,6 +203,7 @@ public partial class USkeletalMesh : USkinnedAsset
                         {
                             if (lod.VertexBufferGPUSkin?.VertsFloat == null)
                                 continue;
+
                             for (var i = 0; i < lod.VertexBufferGPUSkin.VertsFloat.Length; i++)
                             {
                                 var vert = lod.VertexBufferGPUSkin.VertsFloat[i];
@@ -231,7 +232,7 @@ public partial class USkeletalMesh : USkinnedAsset
         if (Ar.Game == GAME_WorldofJadeDynasty)
         {
             _ = new FStripDataFlags(Ar);
-            for (var i = 0; i < LODModels.Length; i++)
+            for (var i = 0; i < LODModels?.Length; i++)
             {
                 if (Ar.ReadBoolean() && GetOrDefault<bool>("bGenerateMeshDistanceField")) _ = new FDistanceFieldVolumeData5(Ar);
             }
@@ -286,6 +287,7 @@ public partial class USkeletalMesh : USkinnedAsset
                 Ar.Position += 8;
                 break;
             case >= GAME_UE4_0:
+                if (Ar.Game is GAME_MonsterHunterOutlanders) Ar.Position += 8;
                 _ = Ar.ReadArray(() => new FPackageIndex(Ar)); // dummyObjs
                 break;
         }
@@ -312,13 +314,14 @@ public partial class USkeletalMesh : USkinnedAsset
             var bHaveSourceData = Ar.ReadBoolean();
             if (bHaveSourceData)
             {
-                new FStaticLODModel(Ar, bHasVertexColors);
+                _ = new FStaticLODModel(Ar, bHasVertexColors);
             }
         }
-        // if (bEnablePerPolyCollision)
-        // {
-        //     var bodySetup = new FPackageIndex(Ar);
-        // }
+
+        if (Ar.Game >= GAME_UE4_0 && bEnablePerPolyCollision)
+        {
+            _ = new FPackageIndex(Ar); // BodySetup 
+        }
 
         if (Ar.Game == GAME_OutlastTrials) Ar.Position += 1;
         if (Ar.Game == GAME_WeHappyFew) Ar.Position += 20;
