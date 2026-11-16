@@ -122,10 +122,9 @@ public class FWorldTileInfo
         }
         else if (Ar.Game is GAME_PlayerUnknownsBattlegrounds or GAME_Lego2KDrive or GAME_GhostwireTokyo) return;
 
-        if (Ar.Ver < EUnrealEngineObjectUE5Version.LARGE_WORLD_COORDINATES)
-        {
-            Ar.Position += 8; // idk
-        }
+        // FWorldTileInfo ends here. In a composition tile the next value is the
+        // LODPackageNames array count, followed by the next tile's FName. Skipping
+        // eight bytes here desynchronizes cooked UE4 world-composition rosters.
     }
 }
 
