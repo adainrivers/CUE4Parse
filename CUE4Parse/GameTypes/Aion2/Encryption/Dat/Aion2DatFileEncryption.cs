@@ -20,23 +20,20 @@ public sealed partial class Aion2DatFileEncryption
 
     public static void Initialize(IFileProvider provider)
     {
-        if (AesKeys.Count != 0)
-            return;
-
-        var keyManifest = provider.Files.Values.FirstOrDefault(x => x.Path.EndsWith("/key_manifest.dat", StringComparison.OrdinalIgnoreCase))
-            ?? throw new ParserException("Unable to locate key_manifest.dat");
-
-        try
+        lock (_instanceLock)
         {
-            var manifestFile = new FAion2KeyManifestFile(keyManifest);
-            lock (_instanceLock)
+            if (AesKeys.Count != 0)
+                return;
+
+            var keyManifest = provider.Files.Values.FirstOrDefault(x => x.Path.EndsWith("/key_manifest.dat", StringComparison.OrdinalIgnoreCase))
+                ?? throw new ParserException("Unable to locate key_manifest.dat");
+
+            try
             {
+                var manifestFile = new FAion2KeyManifestFile(keyManifest);
                 if (manifestFile.VersionContext is { } context)
                 {
-                    Span<byte> input = stackalloc byte[40];
-                    BinaryPrimitives.WriteUInt64LittleEndian(input, HeaderXorConstant);
-                    context.CopyTo(input[8..]);
-                    _headerPermutationRoot = Blake3Hash(input);
+                    _headerPermutationRoot = GetHeaderPermutationRoot(context);
                     _headerKeyRoot = Blake3Hash(_headerPermutationRoot);
                     _useHeaderPermutation = true;
                 }
@@ -49,18 +46,29 @@ public sealed partial class Aion2DatFileEncryption
 
                 AesKeys = manifestFile.AesKeys;
             }
-        }
-        catch (Exception e)
-        {
-            Log.Error(e, "Failed to read key_manifest.dat");
-            throw;
+            catch (Exception e)
+            {
+                Log.Error(e, "Failed to read key_manifest.dat");
+                throw;
+            }
         }
     }
 
-    private static byte[] DeriveHeaderKey(ulong seed, EHeaderType type)
+    internal static ulong GetHeaderPermutationRoot(ReadOnlySpan<byte> versionContext)
+    {
+        Span<byte> input = stackalloc byte[40];
+        BinaryPrimitives.WriteUInt64LittleEndian(input, HeaderXorConstant);
+        versionContext.CopyTo(input[8..]);
+        return Blake3Hash(input);
+    }
+
+    private static byte[] DeriveHeaderKey(ulong seed, EHeaderType type) =>
+        DeriveHeaderKey(seed, type, _headerKeyRoot);
+
+    private static byte[] DeriveHeaderKey(ulong seed, EHeaderType type, ulong headerKeyRoot)
     {
         Span<byte> input = stackalloc byte[24];
-        BinaryPrimitives.WriteUInt64LittleEndian(input, _headerKeyRoot);
+        BinaryPrimitives.WriteUInt64LittleEndian(input, headerKeyRoot);
         BinaryPrimitives.WriteUInt64LittleEndian(input[8..], seed);
         BinaryPrimitives.WriteInt32LittleEndian(input[16..], (int) type);
         input[20..].Clear();

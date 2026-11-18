@@ -73,10 +73,7 @@ public class FAion2KeyManifestFile
                 for (var patch = 0; patch < 1000; patch++)
                 {
                     var version = FormattableString.Invariant($"{major}.{minor}.{patch}");
-                    using var contextHasher = Hasher.New();
-                    contextHasher.Update(_versionContextPrefix);
-                    contextHasher.Update(Encoding.ASCII.GetBytes(version));
-                    var context = contextHasher.Finalize().AsSpan().ToArray();
+                    var context = GetVersionContext(version);
 
                     using var keyHasher = Hasher.New();
                     keyHasher.Update(_manifestHashKey);
@@ -92,6 +89,14 @@ public class FAion2KeyManifestFile
         }
 
         return (null, null);
+    }
+
+    internal static byte[] GetVersionContext(string version)
+    {
+        using var hasher = Hasher.New();
+        hasher.Update(_versionContextPrefix);
+        hasher.Update(Encoding.ASCII.GetBytes(version));
+        return hasher.Finalize().AsSpan().ToArray();
     }
 
     private static bool HasValidRecordTails(byte[] records)

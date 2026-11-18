@@ -20,9 +20,7 @@ public class FAion2L10NFile
 
         if (data.Length >= 0x18 && BitConverter.ToUInt32(data, 0) == 2)
         {
-            Aion2DatFileEncryption.Initialize(provider);
-
-            var decrypted = Aion2DatFileEncryption.DecryptL10N(data, file.Path);
+            var decrypted = Aion2DatFileEncryption.DecryptL10N(data, file.Path, provider);
             using var l10nAr = new FByteArchive("Aion2L10N", decrypted, null);
             if (l10nAr.Read<int>() != 1)
                 throw new ParserException("Invalid AION2 L10N table version");

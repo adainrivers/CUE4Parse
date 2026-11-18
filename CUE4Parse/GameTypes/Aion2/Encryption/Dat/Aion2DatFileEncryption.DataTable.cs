@@ -85,10 +85,10 @@ public sealed partial class Aion2DatFileEncryption
     }
 
     // Field order of the versioned compressed headers: BLAKE3(root || 0x51) drives a Fisher-Yates shuffle.
-    private static void GetHeaderPermutation(Span<byte> permutation)
+    private static void GetHeaderPermutation(Span<byte> permutation, ulong root)
     {
         Span<byte> input = stackalloc byte[12];
-        BinaryPrimitives.WriteUInt64LittleEndian(input, _headerPermutationRoot);
+        BinaryPrimitives.WriteUInt64LittleEndian(input, root);
         BinaryPrimitives.WriteInt32LittleEndian(input[8..], 0x51);
         using var hasher = Hasher.New();
         hasher.Update(input);
@@ -132,7 +132,7 @@ public sealed partial class Aion2DatFileEncryption
                     FAion2DatFileArchive.DecryptData(encodedSuffix, compressedKey[8..16]);
 
                     Span<byte> permutation = stackalloc byte[4];
-                    GetHeaderPermutation(permutation);
+                    GetHeaderPermutation(permutation, _headerPermutationRoot);
                     Span<int> fields = stackalloc int[4];
                     for (var i = 0; i < 4; i++)
                     {
