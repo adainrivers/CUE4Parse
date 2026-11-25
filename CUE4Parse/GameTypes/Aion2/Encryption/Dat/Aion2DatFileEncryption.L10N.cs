@@ -10,6 +10,12 @@ namespace CUE4Parse.GameTypes.Aion2.Encryption.Aes;
 
 public sealed partial class Aion2DatFileEncryption
 {
+    private static readonly (IReadOnlyDictionary<string, FAesKey> Keys, ulong PermutationRoot)[] L10NBuilds =
+    [
+        (Aion2L10NBuild26909920.Keys, Aion2L10NBuild26909920.PermutationRoot),
+        (Aion2L10NBuild26728906.Keys, Aion2L10NBuild26728906.PermutationRoot)
+    ];
+
     public static byte[] DecryptL10N(byte[] dat, string filePath) => DecryptL10N(dat, filePath, null);
 
     internal static byte[] DecryptL10N(byte[] dat, string filePath, IFileProvider? provider)
@@ -21,19 +27,22 @@ public sealed partial class Aion2DatFileEncryption
         var locale = GetL10NLocale(filePath);
         var seed = Blake3Hash($"L10NString_{locale}");
 
-        if (Aion2L10NBuild26728906.Keys.TryGetValue(locale, out var buildKey))
+        foreach (var build in L10NBuilds)
         {
-            var permutationRoot = Aion2L10NBuild26728906.PermutationRoot;
+            if (!build.Keys.TryGetValue(locale, out var buildKey))
+                continue;
+
+            Ar.Position = sizeof(int);
+            var permutationRoot = build.PermutationRoot;
             var candidate = new FL10NHeader(Ar, seed, Blake3Hash(permutationRoot), permutationRoot);
             if (candidate.EncryptionType == EEncryptionType.CompressedAES &&
                 candidate.HasValidSizes(Ar.Length - Ar.Position) &&
                 DecodePayload(Ar, candidate, buildKey) is { } payload)
                 return payload;
-
-            // Other client versions or a hotfix with a different key use the mounted manifest.
-            Ar.Position = sizeof(int);
         }
 
+        // Other client versions or a hotfix with a different key use the mounted manifest.
+        Ar.Position = sizeof(int);
         if (provider is not null)
             Initialize(provider);
 

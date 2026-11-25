@@ -1,0 +1,22 @@
+using CUE4Parse.Encryption.Aes;
+using CUE4Parse.GameTypes.Aion2.Objects;
+
+namespace CUE4Parse.GameTypes.Aion2.Encryption.Aes;
+
+internal static class Aion2L10NBuild26909920
+{
+    internal static readonly ulong PermutationRoot =
+        Aion2DatFileEncryption.GetHeaderPermutationRoot(FAion2KeyManifestFile.GetVersionContext("2.0.13"));
+
+    internal static readonly IReadOnlyDictionary<string, FAesKey> Keys = new Dictionary<string, FAesKey>
+    {
+        ["en-US"] = new("A69ED15698E94645380270BA2B232007FBE21258C091B78C17F819574148204C"),
+        ["de-DE"] = new("4926594FA4FBE3FD5A6050D58170F625C010895D563CD2C34124809418F22A86"),
+        ["fr-FR"] = new("6B6EEA1F40EFA666DB4FACD1CE4A9986FF04C17CF3B66CE7F9348B956D1339A1"),
+        ["es-ES"] = new("A1013AC43378DD5475FDB71F99D39D98DE2DC46AE6BA9C584F727CC81A402C1A"),
+        ["pt-BR"] = new("50EAB7DAAB2F71349A288D7A4A4C1626609D84166BC67DF8D222AFB9CE5D7CCF"),
+        ["ru-RU"] = new("FDEE7E5323BA781B3EED29D64B464871D44A6E405C10C6EDB016D7A0F05919F4"),
+        ["ko-KR"] = new("2AA234C6B90E7DFE921E5F4C391F8A63FCFE05D4E0B3277E796A75AFDED5DB61"),
+        ["ja-JP"] = new("2299968905F73FD01FBFDB6381B3FF5BF3CB1DE855F753C31936AACCBCFE8E16"),
+    };
+}
